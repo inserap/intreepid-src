@@ -1,12 +1,17 @@
 # intreepid
 
-> <Tagline en une ligne — décrit le projet>
-> Statut : draft
+> Workspace de découverte analytique : explorer des données (géospatiales ou non) en dialogue avec des agents LLM pour découvrir des informations non triviales.
+> Statut : draft — vision architecturale v0.2, aucune implémentation engagée.
 > Version : voir [CHANGELOG.md](CHANGELOG.md).
+> Nom de code provisoire (`intreepid`) — nom définitif non tranché (candidats pressentis : Semantree, Semantrek).
 
 ## À quoi sert ce projet
 
-<2-3 paragraphes décrivant la raison d'être, la valeur, et le contexte du projet.>
+`intreepid` est un espace de travail agentique où un ou plusieurs humains explorent des données en dialogue avec des agents LLM, pour découvrir des informations **non triviales** et décider sur la base de connaissances nouvelles. Il s'adosse à la BI classique, il ne la remplace pas.
+
+Trois capacités impossibles sans LLM en définissent la raison d'être : **documentation à coût zéro** (un agent greffier capture tout le raisonnement pendant que les humains restent concentrés sur la découverte), **capitalisation systémique** (chaque session laisse le système plus intelligent sur les données, le domaine et la méthode) et **rigueur architecturée** (agents critique et candide, modèles nuls, traçabilité complète — chaque insight doit survivre à la contradiction avant d'être retenu).
+
+Les LLM y aident, orientent, challengent et proposent — jamais ils ne remplacent le calcul déterministe ni le jugement métier. La vision complète (couches, boucle de découverte, charte des agents, couplage arbre-carte, modèle de mémoire) est décrite dans [`docs/architecture/overview.md`](docs/architecture/overview.md).
 
 ## Architecture
 

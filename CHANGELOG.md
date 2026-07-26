@@ -7,7 +7,7 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), et le v
 ## [Non publié]
 
 ### Ajouté
-- (entrées à venir)
+- Vision architecturale v0.2 (`docs/architecture/overview.md`) et glossaire métier initial (`docs/glossary.md`), issus de la session de fondation du 2026-07-26. Documentation seule — aucune implémentation engagée.
 
 ### Modifié
 - (entrées à venir)
