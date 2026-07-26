@@ -1,0 +1,56 @@
+# Local Claude settings (per-user, never shared) — only if the impl has Claude integration
+.claude/settings.local.json
+
+# Secrets and credentials (NEVER commit)
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.pfx
+secrets/
+credentials.json
+config.local.*
+
+# Databases (often contain sensitive data)
+*.sqlite
+*.sqlite3
+*.db
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE
+.idea/
+.vscode/*.code-workspace.user
+*.swp
+*.swo
+
+# Python (in case the project includes Python code)
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+*.egg-info/
+dist/
+build/
+
+# Node.js (in case the project includes JS/TS code)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.next/
+.nuxt/
+dist/
+
+# Logs
+*.log
+logs/
