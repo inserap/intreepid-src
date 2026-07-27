@@ -15,7 +15,10 @@
 | **Empreinte spatiale (du raisonnement)** | Emprise géographique (ou temporelle / de sous-population) portée par chaque nœud de l'arbre, capturée par le greffier. Fonde le couplage arbre-carte. Primitive candidate à généralisation. |
 | **Zones blanches** | Territoire couvert par les données mais jamais visité par aucune branche de raisonnement. Générateur de questions naïves. |
 | **Greffier** | Agent qui documente silencieusement la session (hypothèses, requêtes, résultats, abandons + raisons, attribution, empreintes) et distille vers le graphe et la biographie à la clôture. |
-| **Curateur** | Agent qui profile les nouveaux datasets, interviewe l'humain, et propose les corrections du catalogue par merge request. |
+| **Curateur** | Agent qui scoute les sources externes quand les données manquent, profile les nouveaux datasets, interviewe l'humain, et propose les corrections du catalogue par merge request. |
+| **Scoutisme de données** | Volet amont du mandat du curateur : identifier et évaluer des sources externes existantes (open data fédéral/cantonal…) quand une question métier arrive sans données dans le socle, et proposer un plan d'acquisition — l'ingestion restant du ressort de FME et de la validation humaine. |
+| **Départ à froid** | Scénario de référence : une question métier arrive sans aucune donnée dans le socle. La boucle de découverte fonctionne quand même, par approximations successives : structuration de l'espace des facteurs, scoutisme, demi-résultat honnête. |
+| **Demi-résultat** | Livrable de première classe d'un départ à froid : grille de scoring multicritère, shortlist, incertitude affichée, carte des angles morts et plan d'acquisition des données manquantes — jamais présenté comme une prédiction. |
 | **Critique** | Agent dont le mandat est de démolir les découvertes (corrélations fallacieuses, Simpson, MAUP, régression vers la moyenne), avec obligation de proportionnalité. |
 | **Candide** | Agent qui pose délibérément les questions naïves/décalées pour ouvrir des voies latérales. |
 | **Facilitateur** | Agent des sessions à plusieurs : sérialise les contributions, relance les silencieux, transforme les désaccords en hypothèses testables. |

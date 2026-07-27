@@ -1,4 +1,4 @@
-# intreepid — Vision architecturale (v0.2)
+# intreepid — Vision architecturale (v0.3)
 
 > **Objet** : workspace de découverte analytique (exploration de données géospatiales ou non en dialogue avec des agents LLM).
 > **Statut** : proposition pour validation — aucune implémentation engagée.
@@ -11,6 +11,7 @@
 |---------|------|---------------|
 | v0.1 | 2026-07-25 | Vision initiale : couches, boucle de découverte, charte des agents, arbre-carte, collaboration, périmètre v1/v2 |
 | v0.2 | 2026-07-25 | Ajouts : rôle **curateur**, outil **`profile_stats`**, **couche modélisation ML** + cas pilote accidents, principe **P9**, **modèle de persistance de la mémoire** |
+| v0.3 | 2026-07-27 | Ajouts : **scoutisme de données** (extension du mandat du curateur, §4.3), **scénario de référence « départ à froid »** (§5), **test de visibilité de la plus-value** en v1 (§12) + risque associé (§13) |
 
 ---
 
@@ -244,7 +245,19 @@ LLM fournit le **regard** qui sait ce qui est bizarre.
 ### 4.3 Le curateur — la curation dans le workflow
 
 Le catalogue vit dans le workflow, pas comme une corvée de documentation.
-Le **curateur** (nouveau rôle, charte §6) opère à deux moments :
+Le **curateur** (nouveau rôle, charte §6) opère à trois moments :
+
+**En amont de l'amont (scoutisme de données)** : quand une question métier
+arrive sans données correspondantes dans le socle, le curateur ne s'arrête
+pas à « dataset introuvable ». Il mobilise les connaissances universelles du
+LLM pour identifier les sources existantes susceptibles de couvrir le besoin
+(opendata.swiss, geo.admin.ch, OFS, portails cantonaux…), évalue leur
+pertinence (couverture, granularité, fraîcheur, conditions d'accès) et
+propose un **plan d'acquisition** — l'ingestion effective restant du ressort
+de FME et de la validation humaine (P3, P8). Le catalogue peut ainsi
+s'enrichir d'une fiche *pressentie* (source, limites anticipées, statut
+« non ingéré ») avant même l'arrivée des données. Cette capacité est la
+condition du scénario « départ à froid » (§5).
 
 **En amont (ingestion)** : profiling automatique du nouveau dataset
 (`profile_stats`), rédaction d'un *brouillon* de fiche, puis **interview de
@@ -291,6 +304,45 @@ Mécanismes clés de session :
   dérives/anomalies et ouvrent des *questions* ; re-tests automatiques des
   insights confirmés (péremption).
 
+### Scénario de référence — le départ à froid
+
+> Cas d'usage étalon : il démontre la capacité la plus contre-intuitive du
+> système — produire de la valeur **avant même qu'une donnée soit ingérée** —
+> et exerce le scoutisme de données (§4.3), l'honnêteté (P6) et le critique.
+
+**Situation** : un utilisateur non expert arrive avec un besoin flou et aucune
+donnée dans le socle. Exemple étalon : *« je cherche un terrain à bâtir dont
+la situation laisse présager une forte progression de valeur »*.
+
+La boucle procède alors par approximations successives :
+
+1. **Structurer la question (zéro donnée nécessaire).** Les connaissances
+   universelles du LLM (économie urbaine, marché foncier) génèrent l'espace
+   des facteurs : accessibilité (temps de trajet aux centres d'emploi,
+   gares), projets d'infrastructure annoncés, dynamique démographique,
+   rareté de la zone à bâtir, fiscalité communale, nuisances et exposition,
+   statut au plan d'affectation. L'utilisateur seul n'en aurait listé que
+   deux ou trois — cette décomposition est déjà un résultat.
+2. **Trier le faisable (scoutisme, §4.3).** Le curateur identifie les
+   sources existantes et leur accessibilité réelle — zones à bâtir
+   harmonisées (ARE), temps de trajet (geo.admin.ch / CFF), projets PRODES,
+   démographie et charge fiscale (OFS) — et annonce d'emblée ce qui
+   manquera (prix de transaction parcellaires difficiles d'accès → proxys).
+3. **Livrer le demi-résultat honnête.** Le livrable n'est **pas** une
+   prédiction de plus-value (personne ne sait faire, et P6 interdit de le
+   prétendre) : c'est une **grille de scoring multicritère spatialisée** —
+   shortlist de zones, incertitude affichée, carte des angles morts, plan
+   d'acquisition des données manquantes. Transposition directe du cadrage
+   du cas accidents (§7) : « carte pour prioriser », jamais « prédiction ».
+
+Le **demi-résultat est un livrable de première classe**, pas un échec faute
+de données : l'utilisateur repart avec une grille de critères qu'il n'aurait
+jamais construite seul, et chaque itération (donnée acquise, hypothèse
+testée) enrichit la suivante — c'est la boucle de découverte elle-même,
+amorcée à vide. Le critique veille au piège spécifique du domaine :
+confondre « les prix ont monté » avec « les prix vont monter » (régression
+vers la moyenne).
+
 ---
 
 ## 6. Charte des agents
@@ -304,7 +356,7 @@ Mécanismes clés de session :
 | **Critique** | Démolir les découvertes : corrélations fallacieuses, Simpson, biais, MAUP, régression vers la moyenne | Challenger tout en permanence (**proportionnalité** : choisir ses combats) | Expliciter le mécanisme du doute, pas juste "douteux" |
 | **Candide** | Questions naïves/décalées à intervalles réguliers ; ouvrir des voies latérales | Se substituer au critique | Assumer la naïveté sans la déguiser en expertise |
 | **Greffier** | Capturer hypothèses, requêtes, résultats, abandons + raisons ; empreintes spatiales des nœuds ; distiller vers graphe et biographie à la clôture | Interrompre le flow ; trier à chaud | Fidélité à ce qui a été dit, attribution exacte |
-| **Curateur** | Profiler les nouveaux datasets, rédiger les brouillons de fiches, interviewer l'humain, proposer les corrections du catalogue (merge requests) | Modifier le catalogue sans validation humaine | Distinguer fait mesuré / interprétation / question ouverte |
+| **Curateur** | Scouter les sources externes quand les données manquent (plan d'acquisition), profiler les nouveaux datasets, rédiger les brouillons de fiches, interviewer l'humain, proposer les corrections du catalogue (merge requests) | Modifier le catalogue sans validation humaine ; déclencher une ingestion sans validation | Distinguer fait mesuré / interprétation / question ouverte ; qualifier l'accessibilité réelle d'une source pressentie |
 | **Facilitateur** (sessions à plusieurs) | Sérialiser les contributions, relancer les silencieux, transformer les désaccords en hypothèses testables | Arbitrer sur le fond | Neutralité entre participants |
 
 ---
@@ -520,13 +572,22 @@ est couvert par le Portal et l'export.
 5. **Couche modélisation ML** (`train_model`/`predict`/`explain`) — pilote
    accidents
 6. Multi-utilisateurs sérialisé par l'agent
-7. Biographie des données automatisée (curateur en continu), playbook,
-   découverte proactive (FME Flow)
+7. Biographie des données automatisée (curateur en continu), **scoutisme de
+   données outillé** (recherche de sources en session, fiches pressenties),
+   playbook, découverte proactive (FME Flow)
 8. Linked brushing complet, small multiples, BI persistante (Evidence.dev)
 9. Recherche sémantique cross-datasets (embeddings sur catalogue)
 
 > **Règle d'admission d'un composant** : il doit soit *accélérer l'itération*,
 > soit *solidifier la connaissance*. Sinon, il n'entre pas.
+
+> **Test de visibilité de la plus-value (v1)** : la boucle « question →
+> SQL → viz » est aujourd'hui commoditisée (un client LLM générique branché
+> sur un serveur MCP DuckDB la fournit). Chaque livrable v1 doit donc
+> répondre à la question : *« qu'est-ce que cette configuration générique
+> n'obtiendrait pas ? »*. La plus-value vit dans la trace (greffier), la
+> mémoire (catalogue, capitalisation) et la rigueur — elle doit être
+> **perceptible dès la v1**, pas promise pour la v2.
 
 ---
 
@@ -540,6 +601,7 @@ est couvert par le Portal et l'export.
 | **Cathédrale** (inflation de composants) | Effort dilué, rien d'abouti | Périmètre v1 strict + règle d'admission |
 | **Empreintes spatiales floues** | Couplage arbre-carte trompeur | Représentation dégradée, nœuds a-spatiaux assumés |
 | **Insight trivial statistiquement fort** | Effet démo sans valeur | Validation métier en session ; filtre "tout le monde le sait" |
+| **Plus-value invisible en v1** (la boucle chat→SQL→viz est commoditisée) | Perçu comme "un chatbot de plus devant DuckDB" | Test de visibilité (§12) ; greffier + catalogue dès la v1 ; chaque démo montre la trace et la capitalisation, pas seulement la réponse |
 | **Survente prédictive** (cas accidents) | Crédibilité démolie par le premier statisticien | Cadrage "carte de risque pour prioriser", jamais "prédiction d'accidents" ; validation temporelle ; critique sur biais de déclaration et régression vers la moyenne |
 | **Catalogue qui se périme** | Agents mal informés = mauvaises découvertes | Curateur en continu, corrections par MR, `questions_deja_explorees` synchronisées avec le graphe |
 | **Confidentialité** | Non-conformité | Pseudonymisation amont (FME), périmètre de données validé par dataset |

@@ -1,7 +1,7 @@
 # intreepid
 
 > Workspace de découverte analytique : explorer des données (géospatiales ou non) en dialogue avec des agents LLM pour découvrir des informations non triviales.
-> Statut : draft — vision architecturale v0.2, aucune implémentation engagée.
+> Statut : draft — vision architecturale v0.3, aucune implémentation engagée.
 > Version : voir [CHANGELOG.md](CHANGELOG.md).
 > Nom de code provisoire (`intreepid`) — nom définitif non tranché (candidats pressentis : Semantree, Semantrek).
 
