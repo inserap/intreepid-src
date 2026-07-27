@@ -2,10 +2,12 @@ from pathlib import Path
 import tempfile
 import duckdb
 
-def open_readonly(parquet_path: str | Path, table: str):
+def open_readonly(parquet_path: str | Path, table: str) -> duckdb.DuckDBPyConnection:
     """Ouvre une base FICHIER .duckdb où la vue est définie, puis la rouvre en
     read_only=True. SELECT/read_parquet via la vue restent possibles ; toute
     écriture (DDL/DML) est rejetée par DuckDB (vérifié empiriquement, MUST advisor)."""
+    if not table.replace("_", "").isalnum():
+        raise ValueError(f"nom de table invalide: {table!r}")
     p = Path(parquet_path).as_posix()
     # répertoire temporaire UNIQUE par appel : évite un PermissionError Windows si une
     # connexion read-only précédente tient encore le .duckdb (SHOULD advisor, env Windows 11).
