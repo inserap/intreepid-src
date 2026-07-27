@@ -2,17 +2,9 @@ from pathlib import Path
 import io
 import os
 import sys
+from typing import Any
 from claude_agent_sdk import query, ClaudeAgentOptions, AssistantMessage, TextBlock
 from intreepid.agent.verdict import parse_verdict, Observation
-
-# Sur Windows, stderr peut être cp1252 ; le SDK y écrit du debug UTF-8
-# (σ, etc. dans les stats MCP). On wrappe en utf-8 avec remplacement.
-_stderr_buffer = getattr(sys.stderr, "buffer", None)
-_UTF8_STDERR: io.TextIOWrapper | None = (
-    io.TextIOWrapper(_stderr_buffer, encoding="utf-8", errors="replace", line_buffering=True)
-    if _stderr_buffer is not None
-    else None
-)
 
 CHARTER = (Path(__file__).parent / "charter.md").read_text(encoding="utf-8")
 
@@ -25,8 +17,26 @@ async def run_analysis(question: str) -> list[Observation]:
             "ANTHROPIC_API_KEY est définie : elle masque CLAUDE_CODE_OAUTH_TOKEN."
             " Unset-la (dev = abonnement)."
         )
-    extra_kwargs: dict = {} if _UTF8_STDERR is None else {"debug_stderr": _UTF8_STDERR}
+    # Sur Windows, stderr peut être cp1252 ; le SDK y écrit du debug UTF-8
+    # (σ, etc. dans les stats MCP). On wrappe localement pour ne pas muter sys.stderr
+    # globalement à l'import.
+    _stderr_buffer = getattr(sys.stderr, "buffer", None)
+    _utf8_stderr: io.TextIOWrapper | None = (
+        io.TextIOWrapper(_stderr_buffer, encoding="utf-8", errors="replace", line_buffering=True)
+        if _stderr_buffer is not None
+        else None
+    )
+    extra_kwargs: dict[str, Any] = {} if _utf8_stderr is None else {"debug_stderr": _utf8_stderr}
     options = ClaudeAgentOptions(
+        # P2/P3 (invariant central) : disallowed_tools bloque les built-ins fichier/shell.
+        # tools=[] supprimerait aussi les outils MCP → on utilise disallowed_tools à la place.
+        # permission_mode="bypassPermissions" est sûr : seuls les 3 outils MCP sont dispo.
+        disallowed_tools=[
+            "Bash", "Read", "Write", "Edit", "MultiEdit",
+            "Glob", "Grep", "LS",
+            "WebSearch", "WebFetch",
+            "NotebookRead", "NotebookEdit",
+        ],
         system_prompt=CHARTER,
         # lancer le serveur MCP dans l'env uv (pas un python nu du PATH)
         mcp_servers={
@@ -44,12 +54,6 @@ async def run_analysis(question: str) -> list[Observation]:
         permission_mode="bypassPermissions",
         **extra_kwargs,
     )
-    # P2/P3 (durcissement, SHOULD advisor) : `allowed_tools` n'EXCLUT PAS les built-ins
-    # (Bash/Read/Write) — il ne fait qu'auto-approuver. Désactiver les built-ins pour que
-    # l'agent ne puisse pas lire le parquet hors `profile_stats`. Ajouter le champ idoine à
-    # ClaudeAgentOptions ci-dessus après avoir vérifié son nom sur la version SDK installée
-    # (candidats : `tools=[]` ou `disallowed_tools=[...]`). Le smoke test (Step 3) échoue
-    # immédiatement si un kwarg est rejeté → garde-fou.
     chunks: list[str] = []
     async for message in query(prompt=question, options=options):
         if isinstance(message, AssistantMessage):
