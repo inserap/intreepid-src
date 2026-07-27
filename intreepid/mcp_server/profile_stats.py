@@ -1,5 +1,3 @@
-import math
-
 TOP_K = 15  # cap dur (borne)
 
 def _ident(name: str) -> str:

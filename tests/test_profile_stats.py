@@ -27,5 +27,5 @@ def test_numeric_block_shape():
     b = out["accident_month"]
     assert b["type"] == "numeric"
     assert 1 <= b["min"] <= b["max"] <= 12
-    for k in ("mean", "median", "p95", "std", "null_rate", "n_outliers_3sigma"):
+    for k in ("type", "min", "max", "mean", "median", "p5", "p25", "p75", "p95", "std", "null_rate", "zero_rate", "n_outliers_3sigma"):
         assert k in b
