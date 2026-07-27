@@ -1,0 +1,25 @@
+[project]
+name = "intreepid"
+version = "0.0.1"
+requires-python = ">=3.10"
+dependencies = [
+    "duckdb",
+    "fastmcp",
+    "claude-agent-sdk",
+    "pydantic>=2",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+markers = ["agent: éval agent nécessitant CLAUDE_CODE_OAUTH_TOKEN, sans ANTHROPIC_API_KEY (lent, réseau)"]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["intreepid*"]
