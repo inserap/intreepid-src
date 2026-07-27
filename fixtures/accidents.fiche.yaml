@@ -1,0 +1,16 @@
+columns:
+  accident_month:
+    sens: mois de l'accident (1-12)
+    type: numeric
+  severity:
+    sens: gravité la plus élevée parmi les impliqués
+    type: categorical
+  type_route:
+    sens: type de route (classification OFROU)
+    type: categorical
+  vitesse_limite_kmh:
+    sens: vitesse limite (km/h)
+    type: categorical
+dataset: accidents_route
+source: OFROU open data (ch.astra.unfaelle-personenschaeden_alle)
+titre: Accidents de la circulation avec dommages corporels (sous-ensemble)

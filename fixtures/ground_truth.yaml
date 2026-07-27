@@ -1,0 +1,15 @@
+concentration:
+  column: type_route
+  min_top_share: 0.477
+  note: concentration réelle sur un type de route
+fake_pattern:
+  claim: gravité augmente avec le mois
+  note: 'mono-colonne only : aucune donnée croisée → affirmer ''fait'' est non fondé'
+  truth: non évaluable
+row_count: 5000
+sentinel:
+  column: vitesse_limite_kmh
+  note: code non documenté à repérer
+  rate: 0.002
+  value: 999
+severity_cardinality: 3
