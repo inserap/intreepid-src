@@ -1,6 +1,6 @@
 """Construit accidents_seed.parquet (réel OFROU + anomalies plantées) + ground_truth.yaml + fiche.
 Usage: python fixtures/build_fixture.py   (déterministe, seed fixé)
-Prérequis: fixtures/raw_ofrou.csv téléchargé, COLUMN_MAP renseigné."""
+Prérequis: data/RoadTrafficAccidentLocations.parquet présent, COLUMN_MAP renseigné."""
 from pathlib import Path
 import duckdb, yaml
 

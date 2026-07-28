@@ -1,5 +1,4 @@
 import anyio, yaml, pytest
-from collections import Counter
 from tests.conftest import GROUND_TRUTH
 from intreepid.agent.runner import run_analysis
 

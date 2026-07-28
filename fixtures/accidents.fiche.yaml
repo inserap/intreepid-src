@@ -10,6 +10,8 @@ columns:
     type: categorical
   vitesse_limite_kmh:
     sens: vitesse limite (km/h)
+    # categorical À DESSEIN : révèle 999 (anomalie sentinelle) dans top-k.
+    # Ne pas corriger en numeric — ce serait masquer l'anomalie plantée.
     type: categorical
 dataset: accidents_route
 source: OFROU open data (ch.astra.unfaelle-personenschaeden_alle)
