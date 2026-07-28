@@ -20,7 +20,7 @@ _MCP_TOOLS = [
 ]
 
 
-def _build_options() -> ClaudeAgentOptions:
+def _build_options(model: str | None = None) -> ClaudeAgentOptions:
     """Construit les options de l'agent avec isolation maximale (invariant P2/P3).
 
     Config retenue (VÉRIFIÉE EMPIRIQUEMENT par smoke, pas par lecture de source) :
@@ -35,6 +35,7 @@ def _build_options() -> ClaudeAgentOptions:
     `disallowed_tools` qui porte l'isolation des built-ins.
     """
     return ClaudeAgentOptions(
+        model=model,  # None → défaut CLI (hérite la session) ; sinon "sonnet"/"haiku"
         allowed_tools=_MCP_TOOLS,  # auto-approuve uniquement les 3 outils MCP
         disallowed_tools=[  # barrière principale : retire les built-ins du contexte
             "Bash",
@@ -66,7 +67,7 @@ def _build_options() -> ClaudeAgentOptions:
     )
 
 
-async def run_analysis(question: str) -> list[Observation]:
+async def run_analysis(question: str, model: str | None = None) -> list[Observation]:
     # Garde Q-0010 : dev sur l'abonnement (CLAUDE_CODE_OAUTH_TOKEN).
     # ANTHROPIC_API_KEY masquerait l'OAuth → on refuse si elle est présente.
     if os.environ.get("ANTHROPIC_API_KEY"):
@@ -74,7 +75,7 @@ async def run_analysis(question: str) -> list[Observation]:
             "ANTHROPIC_API_KEY est définie : elle masque CLAUDE_CODE_OAUTH_TOKEN."
             " Unset-la (dev = abonnement)."
         )
-    options = _build_options()
+    options = _build_options(model)
     chunks: list[str] = []
     async for message in query(prompt=question, options=options):
         if isinstance(message, AssistantMessage):
