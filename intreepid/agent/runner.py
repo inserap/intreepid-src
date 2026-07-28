@@ -67,7 +67,14 @@ def _build_options(model: str | None = None) -> ClaudeAgentOptions:
     )
 
 
-async def run_analysis(question: str, model: str | None = None) -> list[Observation]:
+async def run_analysis(question: str, model: str | None = "opus") -> list[Observation]:
+    """Lance l'agent analyste et renvoie son verdict structuré.
+
+    Défaut `model="opus"` : l'analyste est le producteur de valeur, on prend le
+    modèle le plus capable — l'oracle ne teste que le plancher (mensonge, évidences),
+    pas la finesse d'analyse (banc brique #1 : Sonnet passe, Haiku échoue). Passer
+    None pour hériter du CLI, "sonnet"/"haiku" pour override. Modèle par rôle : Q-0013.
+    """
     # Garde Q-0010 : dev sur l'abonnement (CLAUDE_CODE_OAUTH_TOKEN).
     # ANTHROPIC_API_KEY masquerait l'OAuth → on refuse si elle est présente.
     if os.environ.get("ANTHROPIC_API_KEY"):
