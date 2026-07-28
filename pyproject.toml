@@ -1,0 +1,48 @@
+[project]
+name = "intreepid"
+version = "0.0.1"
+requires-python = ">=3.10"
+dependencies = [
+    "duckdb",
+    "fastmcp",
+    "claude-agent-sdk",
+    "pydantic>=2",
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-asyncio", "ruff", "pyright"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+markers = ["agent: éval agent nécessitant CLAUDE_CODE_OAUTH_TOKEN, sans ANTHROPIC_API_KEY (lent, réseau)"]
+
+# Doctrine qualité — standards@0.7.0 (conventions/code-quality.md)
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "D"]
+# Doctrine code-quality.md « Non-goals » : le gate mandate l'en-tête de fichier (D100)
+# uniquement ; les docstrings de symboles (classes/méthodes/fonctions/packages) sont
+# un non-goal explicite (« extending to every symbol is noise »). __init__.py vides =
+# exception assumée. On garde D100 + les règles de FORME des docstrings (D205, D415).
+ignore = ["D101", "D102", "D103", "D104", "D105", "D106", "D107"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.pyright]
+# Déviation à "standard" (modes pyright : off < basic < standard < strict).
+# strict remonte ~126 erreurs de propagation d'Unknown aux frontières de libs sans
+# stubs (duckdb, fastmcp, claude_agent_sdk, yaml) — checks strict-only. "standard"
+# garde des vérifications réelles solides sans ce bruit. Ratchet vers strict planifié
+# (wrappers typés / stubs). Voir ADR-0008 (spec).
+typeCheckingMode = "standard"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["intreepid*"]

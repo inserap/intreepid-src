@@ -54,3 +54,6 @@ dist/
 # Logs
 *.log
 logs/
+
+# Raw / staged datasets (large, regenerable — only committed fixtures are tracked)
+data/
