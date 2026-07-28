@@ -1,5 +1,14 @@
-import duckdb, yaml
-from tests.conftest import SEED_PARQUET, GROUND_TRUTH
+"""Vérifie que la fixture porte bien les vérités plantées (ground truth).
+
+Contrôle la présence de la sentinelle 999, la cardinalité de gravité et la
+concentration sur type_route conformément au manifeste ground_truth.yaml.
+"""
+
+import duckdb
+import yaml
+
+from tests.conftest import GROUND_TRUTH, SEED_PARQUET, scalar
+
 
 def test_fixture_planted_truths():
     assert SEED_PARQUET.exists(), "lance d'abord: python fixtures/build_fixture.py"
@@ -7,23 +16,20 @@ def test_fixture_planted_truths():
     con = duckdb.connect(":memory:")
     rel = f"read_parquet('{SEED_PARQUET.as_posix()}')"
 
-    n = con.execute(f"SELECT count(*) FROM {rel}").fetchone()[0]
+    n = scalar(con, f"SELECT count(*) FROM {rel}")
     assert n == gt["row_count"]
 
     # sentinelle plantée
-    s999 = con.execute(
-        f"SELECT count(*) FROM {rel} WHERE vitesse_limite_kmh = 999"
-    ).fetchone()[0]
+    s999 = scalar(con, f"SELECT count(*) FROM {rel} WHERE vitesse_limite_kmh = 999")
     assert abs(s999 / n - gt["sentinel"]["rate"]) < 0.001
 
     # cardinalité gravité
-    card = con.execute(
-        f"SELECT count(DISTINCT severity) FROM {rel}"
-    ).fetchone()[0]
+    card = scalar(con, f"SELECT count(DISTINCT severity) FROM {rel}")
     assert card == gt["severity_cardinality"]
 
     # vraie concentration : part de la 1re catégorie de type_route
-    top_share = con.execute(
-        f"SELECT max(c)/sum(c) FROM (SELECT count(*) c FROM {rel} GROUP BY type_route)"
-    ).fetchone()[0]
+    top_share = scalar(
+        con,
+        f"SELECT max(c)/sum(c) FROM (SELECT count(*) c FROM {rel} GROUP BY type_route)",
+    )
     assert top_share >= gt["concentration"]["min_top_share"]

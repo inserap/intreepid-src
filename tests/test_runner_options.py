@@ -4,8 +4,8 @@ N'est PAS marqué @pytest.mark.agent : ne lance pas l'agent, ne touche pas le r�
 Appelle _build_options() et asserte le verrouillage statique.
 Échouera si une modification future rouvre la surface d'attaque.
 """
-import pytest
-from intreepid.agent.runner import _build_options, _MCP_TOOLS
+
+from intreepid.agent.runner import _MCP_TOOLS, _build_options
 
 
 def test_mcp_tools_are_sole_allowed():
@@ -26,9 +26,19 @@ def test_builtins_isolated_via_disallowed():
     """
     opts = _build_options()
     required = {
-        "Bash", "Read", "Write", "Edit", "MultiEdit",
-        "Glob", "Grep", "LS", "WebSearch", "WebFetch",
-        "NotebookRead", "NotebookEdit", "Skill",
+        "Bash",
+        "Read",
+        "Write",
+        "Edit",
+        "MultiEdit",
+        "Glob",
+        "Grep",
+        "LS",
+        "WebSearch",
+        "WebFetch",
+        "NotebookRead",
+        "NotebookEdit",
+        "Skill",
     }
     missing = required - set(opts.disallowed_tools)
     assert not missing, f"built-ins non isolés dans disallowed_tools : {missing}"
@@ -39,11 +49,16 @@ def test_dangerous_builtins_in_disallowed():
     opts = _build_options()
     dangerous = {"Bash", "Read", "Write", "Edit", "WebSearch", "WebFetch", "Skill"}
     missing = dangerous - set(opts.disallowed_tools)
-    assert not missing, f"Ces outils dangereux manquent dans disallowed_tools : {missing}"
+    assert not missing, (
+        f"Ces outils dangereux manquent dans disallowed_tools : {missing}"
+    )
 
 
 def test_strict_mcp_config():
-    """strict_mcp_config=True → bloque les serveurs MCP ambiants (~/.claude, .mcp.json)."""
+    """strict_mcp_config=True → bloque les serveurs MCP ambiants.
+
+    Couvre ~/.claude et .mcp.json (serveurs injectés par l'environnement).
+    """
     opts = _build_options()
     assert opts.strict_mcp_config is True
 

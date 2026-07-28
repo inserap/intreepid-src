@@ -1,7 +1,15 @@
-from pathlib import Path
+"""Pilote l'agent analyste (Claude Agent SDK), isolé aux seuls outils MCP.
+
+L'accès à la donnée passe exclusivement par profile_stats (invariant P2/P3) :
+l'agent ne peut ni lire de fichiers bruts, ni exécuter de commandes système.
+"""
+
 import os
-from claude_agent_sdk import query, ClaudeAgentOptions, AssistantMessage, TextBlock
-from intreepid.agent.verdict import parse_verdict, Observation
+from pathlib import Path
+
+from claude_agent_sdk import AssistantMessage, ClaudeAgentOptions, TextBlock, query
+
+from intreepid.agent.verdict import Observation, parse_verdict
 
 CHARTER = (Path(__file__).parent / "charter.md").read_text(encoding="utf-8")
 
@@ -29,10 +37,18 @@ def _build_options() -> ClaudeAgentOptions:
     return ClaudeAgentOptions(
         allowed_tools=_MCP_TOOLS,  # auto-approuve uniquement les 3 outils MCP
         disallowed_tools=[  # barrière principale : retire les built-ins du contexte
-            "Bash", "Read", "Write", "Edit", "MultiEdit",
-            "Glob", "Grep", "LS",
-            "WebSearch", "WebFetch",
-            "NotebookRead", "NotebookEdit",
+            "Bash",
+            "Read",
+            "Write",
+            "Edit",
+            "MultiEdit",
+            "Glob",
+            "Grep",
+            "LS",
+            "WebSearch",
+            "WebFetch",
+            "NotebookRead",
+            "NotebookEdit",
             "Skill",
         ],
         system_prompt=CHARTER,
@@ -51,8 +67,8 @@ def _build_options() -> ClaudeAgentOptions:
 
 
 async def run_analysis(question: str) -> list[Observation]:
-    # Garde Q-0010 : dev sur l'abonnement (CLAUDE_CODE_OAUTH_TOKEN). ANTHROPIC_API_KEY
-    # masquerait l'OAuth et facturerait l'API → on refuse de tourner si elle est présente.
+    # Garde Q-0010 : dev sur l'abonnement (CLAUDE_CODE_OAUTH_TOKEN).
+    # ANTHROPIC_API_KEY masquerait l'OAuth → on refuse si elle est présente.
     if os.environ.get("ANTHROPIC_API_KEY"):
         raise RuntimeError(
             "ANTHROPIC_API_KEY est définie : elle masque CLAUDE_CODE_OAUTH_TOKEN."

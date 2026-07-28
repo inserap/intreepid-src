@@ -1,7 +1,23 @@
+"""Serveur MCP (FastMCP) exposant les outils read-only du workspace.
+
+Point d'entrée unique de l'agent vers la donnée ; garantit que seuls des
+agrégats et métadonnées sont transmis (invariants P2 et P3).
+"""
+
 from pathlib import Path
+
 from fastmcp import FastMCP
+
 from intreepid.mcp_server.bounds import open_readonly
-from intreepid.mcp_server.catalog import load_fiche, describe as _describe, list_datasets as _list
+from intreepid.mcp_server.catalog import (
+    describe as _describe,
+)
+from intreepid.mcp_server.catalog import (
+    list_datasets as _list,
+)
+from intreepid.mcp_server.catalog import (
+    load_fiche,
+)
 from intreepid.mcp_server.profile_stats import profile_stats as _profile
 
 FIXTURES = Path(__file__).parent.parent.parent / "fixtures"
@@ -27,7 +43,10 @@ def describe() -> dict:
 
 @mcp.tool
 def profile_stats(columns: list[str] | None = None) -> dict:
-    """Carte d'identité statistique (agrégats only, read-only). Jamais de lignes brutes."""
+    """Carte d'identité statistique (agrégats only, read-only).
+
+    Jamais de lignes brutes transmises au LLM.
+    """
     return _profile(_con, TABLE, _fiche, columns)
 
 
