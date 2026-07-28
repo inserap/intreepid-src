@@ -16,12 +16,22 @@ def test_mcp_tools_are_sole_allowed():
     )
 
 
-def test_builtin_tools_disabled():
-    """tools=[] → built-ins désactivés (--tools '' passé au CLI)."""
+def test_builtins_isolated_via_disallowed():
+    """Isolation des built-ins via disallowed_tools.
+
+    `tools=[]` a été retiré car il vide AUSSI les outils MCP (vérifié par smoke :
+    l'agent se retrouve sans aucun outil). L'isolation P2/P3 repose donc sur
+    disallowed_tools, qui doit contenir l'ensemble complet des built-ins
+    fichier/shell/web + Skill.
+    """
     opts = _build_options()
-    assert opts.tools == [], (
-        f"tools doit être [] pour désactiver les built-ins, got {opts.tools!r}"
-    )
+    required = {
+        "Bash", "Read", "Write", "Edit", "MultiEdit",
+        "Glob", "Grep", "LS", "WebSearch", "WebFetch",
+        "NotebookRead", "NotebookEdit", "Skill",
+    }
+    missing = required - set(opts.disallowed_tools)
+    assert not missing, f"built-ins non isolés dans disallowed_tools : {missing}"
 
 
 def test_dangerous_builtins_in_disallowed():

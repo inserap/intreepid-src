@@ -15,20 +15,20 @@ _MCP_TOOLS = [
 def _build_options() -> ClaudeAgentOptions:
     """Construit les options de l'agent avec isolation maximale (invariant P2/P3).
 
-    Config retenue (vérifiée sur le source SDK 0.2.128) :
-    - tools=[]          → --tools ""  : base built-ins vide (fichier, shell, web…)
-    - allowed_tools     → --allowedTools : seuls les 3 outils MCP intreepid autorisés
-    - disallowed_tools  → défense-en-profondeur redondante (garde si tools= change)
-    - strict_mcp_config → --strict-mcp-config : bloque les serveurs MCP ambiants
-    - setting_sources=[] → --setting-sources= : bloque les settings utilisateur/projet
-    - skills=[]         → pas d'injection Skill dans allowed_tools
-    MCP tools sont toujours actifs : tools= et allowed_tools opèrent sur des listes
-    orthogonales (built-ins vs. MCP), confirmé par subprocess_cli.py lignes 479–495.
+    Config retenue (VÉRIFIÉE EMPIRIQUEMENT par smoke, pas par lecture de source) :
+    - disallowed_tools  → retire les built-ins fichier/shell/web + Skill du contexte
+                          (barrière PRINCIPALE ; smoke : Bash/Read bloqués, MCP OK)
+    - allowed_tools     → auto-approuve UNIQUEMENT les 3 outils MCP intreepid
+    - strict_mcp_config → ignore les serveurs MCP ambiants (~/.claude, .mcp.json…)
+    - setting_sources=[] → ignore les settings utilisateur/projet (pas de skills tiers)
+    - skills=[]         → aucune skill injectée
+    NB : `tools=[]` a été essayé puis RETIRÉ — il vide AUSSI les outils MCP (smoke :
+    l'agent se retrouve sans aucun outil et ne peut plus profiler). C'est
+    `disallowed_tools` qui porte l'isolation des built-ins.
     """
     return ClaudeAgentOptions(
-        tools=[],  # désactive tous les built-ins (Bash, Read, Write, Web…)
-        allowed_tools=_MCP_TOOLS,  # allowlist explicite MCP-only
-        disallowed_tools=[  # défense-en-profondeur
+        allowed_tools=_MCP_TOOLS,  # auto-approuve uniquement les 3 outils MCP
+        disallowed_tools=[  # barrière principale : retire les built-ins du contexte
             "Bash", "Read", "Write", "Edit", "MultiEdit",
             "Glob", "Grep", "LS",
             "WebSearch", "WebFetch",
