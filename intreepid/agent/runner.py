@@ -20,12 +20,16 @@ async def run_analysis(question: str) -> list[Observation]:
     # Sur Windows, stderr peut être cp1252 ; le SDK y écrit du debug UTF-8
     # (σ, etc. dans les stats MCP). On wrappe localement pour ne pas muter sys.stderr
     # globalement à l'import.
-    _stderr_buffer = getattr(sys.stderr, "buffer", None)
-    _utf8_stderr: io.TextIOWrapper | None = (
-        io.TextIOWrapper(_stderr_buffer, encoding="utf-8", errors="replace", line_buffering=True)
-        if _stderr_buffer is not None
-        else None
-    )
+    # Sur Windows, stderr peut être cp1252 ; le SDK y écrit du debug UTF-8.
+    # On ouvre fd=2 séparément (closefd=False) pour éviter de détacher le buffer
+    # de sys.stderr (ce qui crasherait sous pytest).
+    _utf8_stderr: io.TextIOWrapper | None = None
+    try:
+        _fd = sys.stderr.fileno()
+        _utf8_stderr = open(_fd, "w", encoding="utf-8", errors="replace",
+                            closefd=False, buffering=1)
+    except (AttributeError, io.UnsupportedOperation, OSError):
+        _utf8_stderr = None
     extra_kwargs: dict[str, Any] = {} if _utf8_stderr is None else {"debug_stderr": _utf8_stderr}
     options = ClaudeAgentOptions(
         # P2/P3 (invariant central) : disallowed_tools bloque les built-ins fichier/shell.
