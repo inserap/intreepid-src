@@ -33,6 +33,7 @@ def _any(obs, keywords, statuts):
 
 
 def _mentions(claim, keywords):
+    """True si le claim contient au moins un des mots-clés."""
     c = claim.lower()
     return any(k in c for k in keywords)
 
@@ -77,7 +78,6 @@ def test_agent_eval_thresholds():
             obs,
             [
                 "emprise",
-                "hors",
                 "coordonn",
                 "géom",
                 "geom",
