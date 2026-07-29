@@ -163,6 +163,8 @@ def _spatial(
     if row is None:
         raise RuntimeError(f"profil spatial sans résultat pour {col!r}")
     n, nulls, empties, invalids, zs, out_env = row
+    if n == 0:
+        raise RuntimeError(f"profil spatial sur table vide pour {col!r}")
     types = {
         r[0]: r[1]
         for r in con.execute(
@@ -170,6 +172,11 @@ def _spatial(
             f" WHERE {c} IS NOT NULL GROUP BY g ORDER BY f DESC"
         ).fetchall()
     }
+    # NB : hors-emprise/emprise via ST_XMin/ST_YMin — exact pour des POINTS
+    # (ST_XMin==ST_XMax). Pour lignes/polygones, c'est une approximation par le
+    # coin min de la bbox ; une géométrie qui ne dépasse que côté max ne serait
+    # pas comptée hors-emprise. Suffisant pour la fixture (100% POINT) ; à affiner
+    # si des types étendus arrivent (brique ultérieure).
     ext = con.execute(
         f"SELECT min(ST_XMin({c})), max(ST_XMax({c})),"
         f"       min(ST_YMin({c})), max(ST_YMax({c}))"
