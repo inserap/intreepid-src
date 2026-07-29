@@ -10,6 +10,10 @@ import duckdb
 
 TOP_K = 15  # cap dur (borne)
 
+# Emprise LV95 (EPSG:2056) approximative de la Suisse : E_min,E_max,N_min,N_max.
+CH_BBOX = (2_480_000, 2_840_000, 1_070_000, 1_300_000)
+_DEFERRED = "prévu / non implémenté (brique ultérieure : H3 multi-résolution anti-MAUP)"
+
 
 def _ident(name: str) -> str:
     if not name.replace("_", "").isalnum():
@@ -139,7 +143,77 @@ def _temporal(con: duckdb.DuckDBPyConnection, table: str, col: str) -> dict[str,
     }
 
 
-_DISPATCH = {"categorical": _categorical, "numeric": _numeric, "temporal": _temporal}
+def _spatial(
+    con: duckdb.DuckDBPyConnection, table: str, col: str, spec: dict[str, Any]
+) -> dict[str, Any]:
+    c, t = _ident(col), _ident(table)
+    emin, emax, nmin, nmax = CH_BBOX
+    row = con.execute(f"""
+        SELECT count(*),
+               count(*) FILTER (WHERE {c} IS NULL),
+               count(*) FILTER (WHERE {c} IS NOT NULL AND ST_IsEmpty({c})),
+               count(*) FILTER (WHERE {c} IS NOT NULL AND NOT ST_IsValid({c})),
+               count(*) FILTER (WHERE {c} IS NOT NULL AND ST_HasZ({c})),
+               count(*) FILTER (WHERE {c} IS NOT NULL AND (
+                   (ST_XMin({c})=0 AND ST_YMin({c})=0)
+                   OR ST_XMin({c}) NOT BETWEEN {emin} AND {emax}
+                   OR ST_YMin({c}) NOT BETWEEN {nmin} AND {nmax}))
+        FROM {t}
+    """).fetchone()
+    if row is None:
+        raise RuntimeError(f"profil spatial sans résultat pour {col!r}")
+    n, nulls, empties, invalids, zs, out_env = row
+    types = {
+        r[0]: r[1]
+        for r in con.execute(
+            f"SELECT ST_GeometryType({c}) g, count(*) f FROM {t}"
+            f" WHERE {c} IS NOT NULL GROUP BY g ORDER BY f DESC"
+        ).fetchall()
+    }
+    ext = con.execute(
+        f"SELECT min(ST_XMin({c})), max(ST_XMax({c})),"
+        f"       min(ST_YMin({c})), max(ST_YMax({c}))"
+        f" FROM {t}"
+        f" WHERE {c} IS NOT NULL AND NOT (ST_XMin({c})=0 AND ST_YMin({c})=0)"
+        f"   AND ST_XMin({c}) BETWEEN {emin} AND {emax}"
+        f"   AND ST_YMin({c}) BETWEEN {nmin} AND {nmax}"
+    ).fetchone()
+    if ext is None:
+        raise RuntimeError(f"emprise spatiale sans résultat pour {col!r}")
+    size = con.execute(
+        f"SELECT max(ST_Length({c})), max(ST_Area({c})) FROM {t} WHERE {c} IS NOT NULL"
+    ).fetchone()
+    if size is None:
+        raise RuntimeError(f"mesures de taille spatiale sans résultat pour {col!r}")
+    return {
+        "type": "spatial",
+        "n": n,
+        "srid_declared": spec.get("srid"),
+        "geometry_types": types,
+        "null_rate": round(nulls / n, 4),
+        "empty_rate": round(empties / n, 4),
+        "invalid_rate": round(invalids / n, 4),
+        "has_z_rate": round(zs / n, 4),
+        "out_of_envelope_rate": round(out_env / n, 4),
+        "extent": {
+            "min_x": ext[0],
+            "max_x": ext[1],
+            "min_y": ext[2],
+            "max_y": ext[3],
+        },
+        "max_length": size[0],
+        "max_area": size[1],
+        "nearest_neighbor": _DEFERRED,
+        "density_by_cell": _DEFERRED,
+    }
+
+
+_DISPATCH = {
+    "categorical": _categorical,
+    "numeric": _numeric,
+    "temporal": _temporal,
+    "spatial": _spatial,
+}
 
 
 def profile_stats(
@@ -154,12 +228,16 @@ def profile_stats(
     for col in cols:
         if col not in allowed:
             raise ValueError(f"colonne hors allowlist de la fiche: {col!r}")
-        ctype = allowed[col].get("type", "categorical")
+        spec = allowed[col]
+        ctype = spec.get("type", "categorical")
         fn = _DISPATCH.get(ctype)
         if fn is None:
             raise ValueError(
                 f"type de colonne prévu / non implémenté: {ctype!r}"
                 " (types couverts: categorical, numeric, temporal, spatial)"
             )
-        out[col] = fn(con, table, col)
+        if ctype == "spatial":
+            out[col] = fn(con, table, col, spec)
+        else:
+            out[col] = fn(con, table, col)
     return out

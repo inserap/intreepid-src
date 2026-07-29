@@ -86,3 +86,18 @@ def test_unknown_type_message():
     fiche = {"dataset": "x", "columns": {"c": {"type": "code"}}}
     with pytest.raises(ValueError, match="prévu / non implémenté"):
         profile_stats(con, "x", fiche, ["c"])
+
+
+def test_spatial_block_shape():
+    fiche = load_fiche(FICHE)
+    out = profile_stats(_con(), "accidents_route", fiche, ["geom"])
+    b = out["geom"]
+    assert b["type"] == "spatial"
+    assert b["srid_declared"] == 2056
+    assert "POINT" in b["geometry_types"]
+    assert b["out_of_envelope_rate"] > 0  # anomalie spatiale plantée
+    assert b["extent"]["min_x"] >= 2_480_000  # null-island (0,0) exclu de l'emprise
+    for k in ("null_rate", "empty_rate", "invalid_rate", "has_z_rate"):
+        assert k in b
+    assert "prévu" in b["nearest_neighbor"]
+    assert "prévu" in b["density_by_cell"]
