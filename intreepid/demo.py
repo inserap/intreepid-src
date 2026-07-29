@@ -15,8 +15,12 @@ from intreepid.mcp_server.profile_stats import profile_stats
 
 FIX = Path(__file__).parent.parent / "fixtures"
 QUESTION = (
-    "Profile accidents_route : accidents plus graves en fin d'année ? "
-    "valeurs suspectes ? Rends ton verdict."
+    "Profile TOUTES les colonnes du dataset accidents_route (catégorielles, "
+    "numériques, temporelle `date`, spatiale `geom`). En particulier : "
+    "(a) les accidents sont-ils plus GRAVES en fin d'année (relation gravité/mois) ? "
+    "(b) y a-t-il des valeurs ou coordonnées suspectes ? "
+    "(c) le volume d'accidents baisse-t-il dans la série — et si oui, peut-on en "
+    "conclure que les routes deviennent plus sûres ? Rends ton verdict."
 )
 
 
