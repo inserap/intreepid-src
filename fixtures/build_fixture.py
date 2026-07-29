@@ -2,7 +2,10 @@
 
 Produit accidents_seed.parquet, ground_truth.yaml et accidents.fiche.yaml de
 façon déterministe (seed fixé). Prérequis : data/RoadTrafficAccidentLocations.parquet
-présent et COLUMN_MAP renseigné. Usage : python fixtures/build_fixture.py
+présent et COLUMN_MAP renseigné. Usage : uv run python fixtures/build_fixture.py
+
+Anomalies plantées : sentinelle 999 (vitesse), trou de série temporel + rupture de
+volume (mois retirés), coordonnées implausibles (null-island (0,0) + hors emprise CH).
 """
 
 from pathlib import Path
@@ -14,56 +17,106 @@ HERE = Path(__file__).parent
 SRC = HERE.parent / "data" / "RoadTrafficAccidentLocations.parquet"
 SEED = HERE / "accidents_seed.parquet"
 N_ROWS = 5000
-SENTINEL_RATE = 0.002  # 0.2%
+SENTINEL_RATE = 0.002  # 0.2% pour la sentinelle vitesse 999
+GEO_SENTINEL_RATE = (
+    0.01  # taux nominal ~1% (le taux effectif réel est enregistré dans ground_truth)
+)
+GAP_YEARS = (
+    2018,
+    2019,
+)  # années retirées -> trou de série + rupture de volume (≥2 éléments)
 
 # Colonnes réelles OFROU (vérifiées 2026-07-27, 36 colonnes) :
 COLUMN_MAP = {
     "type_route": "RoadType_fr",
     "severity": "AccidentSeverityCategory_fr",
-    "accident_month": "AccidentMonth",  # BIGINT 1-12, déjà présent (pas de dérivation)
+    "accident_month": "AccidentMonth",  # BIGINT 1-12
+    "year": "AccidentYear",
+    "east": "AccidentLocation_CHLV95_E",
+    "north": "AccidentLocation_CHLV95_N",
+    "canton": "CantonCode",
 }
 
 
 def main() -> None:
     con = duckdb.connect(":memory:")
+    con.execute("INSTALL spatial")
+    con.execute("LOAD spatial")
     con.execute("SELECT setseed(0.42)")
     src = f"read_parquet('{SRC.as_posix()}')"
-    # projection (mois réel, pas de dérivation) + sous-échantillon déterministe
+    m = COLUMN_MAP
+    # construction explicite (évite (2018,))
+    gap_list = ", ".join(str(y) for y in GAP_YEARS)
+    # projection + sous-échantillon déterministe ; retire GAP_YEARS (trou/rupture)
     con.execute(f"""
         CREATE TABLE base AS
         SELECT
-            "{COLUMN_MAP["type_route"]}"::TEXT        AS type_route,
-            "{COLUMN_MAP["severity"]}"::TEXT          AS severity,
-            "{COLUMN_MAP["accident_month"]}"::INTEGER AS accident_month
+            "{m["type_route"]}"::TEXT        AS type_route,
+            "{m["severity"]}"::TEXT          AS severity,
+            "{m["accident_month"]}"::INTEGER AS accident_month,
+            "{m["year"]}"::INTEGER           AS year,
+            "{m["east"]}"::DOUBLE            AS east,
+            "{m["north"]}"::DOUBLE           AS north,
+            "{m["canton"]}"::TEXT            AS canton
         FROM {src}
-        WHERE "{COLUMN_MAP["type_route"]}" IS NOT NULL
-          AND "{COLUMN_MAP["severity"]}" IS NOT NULL
+        WHERE "{m["type_route"]}" IS NOT NULL
+          AND "{m["severity"]}" IS NOT NULL
+          AND "{m["year"]}" NOT IN ({gap_list})
         USING SAMPLE {N_ROWS} ROWS (reservoir, 42)
     """)
-    # ANOMALIE 1 (sentinelle) : colonne PLANTÉE (absente de l'OFROU réel).
-    # 999 non documenté dans SENTINEL_RATE des lignes, sinon vitesses plausibles.
+    # ANOMALIE 1 (sentinelle vitesse) + ANOMALIE 2 (date) + ANOMALIE spatiale.
+    # ST_Point(north, east) : E/N inversés -> coordonnées hors emprise CH
+    # Note : date est toujours fixée au 1er du mois (année + mois OFROU)
     con.execute(f"""
         CREATE TABLE seed AS
-        SELECT type_route, severity, accident_month,
+        SELECT type_route, severity, accident_month, canton,
+               make_date(year, accident_month, 1) AS date,
                CASE WHEN random() < {SENTINEL_RATE} THEN 999
                     ELSE ([30,50,60,80,120])[cast(floor(random()*5)+1 AS INT)]
-               END AS vitesse_limite_kmh
+               END AS vitesse_limite_kmh,
+               CASE
+                   WHEN random() < {GEO_SENTINEL_RATE / 2} THEN ST_Point(0, 0)
+                   WHEN random() < {GEO_SENTINEL_RATE} THEN ST_Point(north, east)
+                   ELSE ST_Point(east, north)
+               END AS geom
         FROM base
     """)
     con.execute(f"COPY seed TO '{SEED.as_posix()}' (FORMAT PARQUET)")
-    # ANOMALIE 3 (faux pattern) : mono-colonne only → l'agent n'a AUCUNE donnée
-    # croisée gravité×mois ; toute affirmation 'fait' est non fondée (ground_truth).
+    # ANOMALIE (faux pattern) : mono-colonne only -> aucune donnée croisée
+    # gravité×mois ET aucune preuve que la baisse de volume = routes plus sûres
+    # (artefact de collecte).
+
+    # M1 : calculer le ground_truth depuis le PARQUET RELU (pas la table en
+    # mémoire), pour que build et tests lisent EXACTEMENT la même source
+    # (round-trip GeoParquet inclus).
+    rel = f"read_parquet('{SEED.as_posix()}')"
 
     def scalar(sql: str):
         row = con.execute(sql).fetchone()
         assert row is not None
         return row[0]
 
-    n = scalar("SELECT count(*) FROM seed")
-    card = scalar("SELECT count(DISTINCT severity) FROM seed")
+    n = scalar(f"SELECT count(*) FROM {rel}")
+    card = scalar(f"SELECT count(DISTINCT severity) FROM {rel}")
     top_share = scalar(
-        "SELECT max(c)/sum(c) FROM (SELECT count(*) c FROM seed GROUP BY type_route)"
+        f"SELECT max(c)/sum(c) FROM (SELECT count(*) c FROM {rel} GROUP BY type_route)"
     )
+    missing = scalar(f"""
+        WITH b AS (
+            SELECT date_trunc('month', min(date)) a,
+                   date_trunc('month', max(date)) b
+            FROM {rel}
+        ),
+        e AS (SELECT unnest(generate_series(a, b, INTERVAL 1 MONTH)) m FROM b),
+        p AS (SELECT DISTINCT date_trunc('month', date) m FROM {rel})
+        SELECT count(*) FROM e LEFT JOIN p USING(m) WHERE p.m IS NULL
+    """)
+    out_env = scalar(f"""
+        SELECT count(*) FROM {rel} WHERE geom IS NOT NULL AND (
+            (ST_XMin(geom)=0 AND ST_YMin(geom)=0)
+            OR ST_XMin(geom) NOT BETWEEN 2480000 AND 2840000
+            OR ST_YMin(geom) NOT BETWEEN 1070000 AND 1300000)
+    """)
 
     gt = {
         "row_count": int(n),
@@ -79,12 +132,34 @@ def main() -> None:
             "min_top_share": round(float(top_share) - 0.02, 3),
             "note": "concentration réelle sur un type de route",
         },
+        "temporal_gap": {
+            "column": "date",
+            "missing_months": int(missing),
+            "removed_years": list(GAP_YEARS),
+            "note": (
+                "années retirées -> trou de série + rupture de volume"
+                " (changement de collecte)"
+            ),
+        },
+        "spatial_sentinel": {
+            "column": "geom",
+            "rate": round(float(out_env) / float(n), 4),
+            "note": "coordonnées implausibles : null-island (0,0) + hors emprise CH",
+        },
         "fake_pattern": {
             "claim": "gravité augmente avec le mois",
             "truth": "non évaluable",
             "note": (
                 "mono-colonne only : aucune donnée croisée"
-                " → affirmer 'fait' est non fondé"
+                " -> affirmer 'fait' est non fondé"
+            ),
+        },
+        "fake_temporal_pattern": {
+            "claim": "la baisse de volume prouve que les routes deviennent plus sûres",
+            "truth": "non fondé",
+            "note": (
+                "la baisse est un artefact de collecte (années retirées)"
+                " ; causalité non établie"
             ),
         },
     }
@@ -109,13 +184,33 @@ def main() -> None:
             "vitesse_limite_kmh": {
                 "type": "categorical",
                 "sens": "vitesse limite (km/h)",
+                "note": "À DESSEIN : révèle la sentinelle 999 dans le top-k",
+            },
+            "date": {
+                "type": "temporal",
+                "sens": "date de l'accident (1er du mois : année + mois OFROU)",
+            },
+            "canton": {
+                "type": "categorical",
+                "sens": "canton de l'accident (code officiel)",
+            },
+            "geom": {
+                "type": "spatial",
+                "srid": 2056,
+                "geometry_type_attendu": "point",
+                "sens": "localisation de l'accident (point LV95)",
+                "piege": (
+                    "géolocalisation GPS depuis 2016, adresse avant"
+                    " -> précision variable"
+                ),
+                "unite": "mètres",
             },
         },
     }
     (HERE / "accidents.fiche.yaml").write_text(
         yaml.safe_dump(fiche, allow_unicode=True), encoding="utf-8"
     )
-    print(f"OK: {n} lignes -> {SEED.name}")
+    print(f"OK: {n} lignes -> {SEED.name} (trous={missing}, hors_emprise={out_env})")
 
 
 if __name__ == "__main__":

@@ -22,16 +22,16 @@ QUESTION = (
 
 def main():
     fiche = load_fiche(FIX / "accidents.fiche.yaml")
-    con = open_readonly(FIX / "accidents_seed.parquet", "accidents_route")
-    print("=== profile_stats (brut) ===")
-    print(
-        json.dumps(
-            profile_stats(con, "accidents_route", fiche),
-            ensure_ascii=False,
-            indent=2,
-            default=str,
+    with open_readonly(FIX / "accidents_seed.parquet", "accidents_route") as con:
+        print("=== profile_stats (brut) ===")
+        print(
+            json.dumps(
+                profile_stats(con, "accidents_route", fiche),
+                ensure_ascii=False,
+                indent=2,
+                default=str,
+            )
         )
-    )
     print("\n=== verdict de l'agent ===")
     for o in anyio.run(run_analysis, QUESTION):
         print(f"- [{o.statut}] {o.claim}" + (f"  ({o.note})" if o.note else ""))

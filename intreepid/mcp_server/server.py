@@ -4,6 +4,8 @@ Point d'entrée unique de l'agent vers la donnée ; garantit que seuls des
 agrégats et métadonnées sont transmis (invariants P2 et P3).
 """
 
+import atexit
+from contextlib import ExitStack
 from pathlib import Path
 
 from fastmcp import FastMCP
@@ -24,7 +26,9 @@ FIXTURES = Path(__file__).parent.parent.parent / "fixtures"
 TABLE = "accidents_route"
 
 _fiche = load_fiche(FIXTURES / "accidents.fiche.yaml")
-_con = open_readonly(FIXTURES / "accidents_seed.parquet", TABLE)
+_stack = ExitStack()
+_con = _stack.enter_context(open_readonly(FIXTURES / "accidents_seed.parquet", TABLE))
+atexit.register(_stack.close)
 
 mcp = FastMCP("intreepid")
 
