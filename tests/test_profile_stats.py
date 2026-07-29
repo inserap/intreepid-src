@@ -6,10 +6,11 @@ catégories et la forme du bloc numérique pour accident_month.
 
 import duckdb
 import pytest
+import yaml
 
 from intreepid.mcp_server.catalog import load_fiche
 from intreepid.mcp_server.profile_stats import profile_stats
-from tests.conftest import FICHE, SEED_PARQUET
+from tests.conftest import FICHE, GROUND_TRUTH, SEED_PARQUET
 
 
 def _con():
@@ -71,7 +72,8 @@ def test_temporal_block_shape():
     b = out["date"]
     assert b["type"] == "temporal"
     assert b["min"] <= b["max"]
-    assert b["series_gaps_months"] > 0  # trou de série planté
+    gt = yaml.safe_load(GROUND_TRUTH.read_text(encoding="utf-8"))
+    assert b["series_gaps_months"] == gt["temporal_gap"]["missing_months"]
     assert set(b["seasonality_by_month"]) <= {str(mo) for mo in range(1, 13)}
     assert (
         len(b["volume_by_year"]) >= 2
@@ -79,8 +81,8 @@ def test_temporal_block_shape():
 
 
 def test_unknown_type_message():
-    fiche = {"dataset": "x", "columns": {"c": {"type": "code"}}}
-    con = _con()
+    con = duckdb.connect(":memory:")
     con.execute("CREATE VIEW x AS SELECT 1 AS c")
+    fiche = {"dataset": "x", "columns": {"c": {"type": "code"}}}
     with pytest.raises(ValueError, match="prévu / non implémenté"):
         profile_stats(con, "x", fiche, ["c"])
