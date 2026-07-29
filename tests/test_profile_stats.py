@@ -54,6 +54,7 @@ def test_numeric_block_shape():
         "p75",
         "p95",
         "std",
+        "skewness",
         "null_rate",
         "zero_rate",
         "n_outliers_3sigma",

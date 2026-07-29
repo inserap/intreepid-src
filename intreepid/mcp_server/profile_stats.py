@@ -57,12 +57,13 @@ def _numeric(con: duckdb.DuckDBPyConnection, table: str, col: str) -> dict[str, 
         SELECT count(*), count({c}), min({c}), max({c}), avg({c}), median({c}),
                quantile_cont({c},0.05), quantile_cont({c},0.25),
                quantile_cont({c},0.75), quantile_cont({c},0.95),
-               stddev_samp({c}), sum(CASE WHEN {c}=0 THEN 1 ELSE 0 END)
+               stddev_samp({c}), sum(CASE WHEN {c}=0 THEN 1 ELSE 0 END),
+               skewness({c})
         FROM {t}
     """).fetchone()
     if row is None:
         raise RuntimeError(f"profil numérique sans résultat pour {col!r}")
-    n, nn, mn, mx, avg, med, p5, p25, p75, p95, std, zeros = row
+    n, nn, mn, mx, avg, med, p5, p25, p75, p95, std, zeros, skew = row
     outliers = 0
     if std and std > 0:
         outliers = _scalar(
@@ -80,6 +81,7 @@ def _numeric(con: duckdb.DuckDBPyConnection, table: str, col: str) -> dict[str, 
         "p75": p75,
         "p95": p95,
         "std": round(std or 0.0, 4),
+        "skewness": round(skew or 0.0, 4),
         "null_rate": round((n - nn) / n, 4),
         "zero_rate": round(zeros / n, 4),
         "n_outliers_3sigma": outliers,
