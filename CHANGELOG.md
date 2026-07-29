@@ -6,7 +6,8 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), et le v
 
 ## [Non publié]
 
-(rien pour l'instant)
+### Ajouté
+- État de l'art des projets GitHub similaires ou adjacents (`docs/research/2026-07-29-etat-de-lart-github.md`) : veille sur cinq axes (agents data/text-to-SQL, LLM×géospatial, serveurs MCP data/géo, profiling/insights/BI-as-code/rigueur statistique, provenance/arbres/agents adverses/mémoire), avec briques réutilisables, points de vigilance licences et enseignements transverses.
 
 ## [0.2.0] — 2026-07-28
 
