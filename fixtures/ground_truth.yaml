@@ -1,15 +1,30 @@
 concentration:
   column: type_route
-  min_top_share: 0.477
+  min_top_share: 0.482
   note: concentration réelle sur un type de route
 fake_pattern:
   claim: gravité augmente avec le mois
-  note: 'mono-colonne only : aucune donnée croisée → affirmer ''fait'' est non fondé'
+  note: 'mono-colonne only : aucune donnée croisée -> affirmer ''fait'' est non fondé'
   truth: non évaluable
-row_count: 5000
+fake_temporal_pattern:
+  claim: la baisse de volume prouve que les routes deviennent plus sûres
+  note: la baisse est un artefact de collecte (années retirées) ; causalité non établie
+  truth: non fondé
+row_count: 4314
 sentinel:
   column: vitesse_limite_kmh
   note: code non documenté à repérer
   rate: 0.002
   value: 999
 severity_cardinality: 3
+spatial_sentinel:
+  column: geom
+  note: 'coordonnées implausibles : null-island (0,0) + hors emprise CH'
+  rate: 0.0167
+temporal_gap:
+  column: date
+  missing_months: 24
+  note: années retirées -> trou de série + rupture de volume (changement de collecte)
+  removed_years:
+  - 2018
+  - 2019

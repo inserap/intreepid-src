@@ -2,6 +2,19 @@ columns:
   accident_month:
     sens: mois de l'accident (1-12)
     type: numeric
+  canton:
+    sens: canton de l'accident (code officiel)
+    type: categorical
+  date:
+    sens: 'date de l''accident (1er du mois : année + mois OFROU)'
+    type: temporal
+  geom:
+    geometry_type_attendu: point
+    piege: géolocalisation GPS depuis 2016, adresse avant -> précision variable
+    sens: localisation de l'accident (point LV95)
+    srid: 2056
+    type: spatial
+    unite: mètres
   severity:
     sens: gravité la plus élevée parmi les impliqués
     type: categorical
@@ -10,8 +23,6 @@ columns:
     type: categorical
   vitesse_limite_kmh:
     sens: vitesse limite (km/h)
-    # categorical À DESSEIN : révèle 999 (anomalie sentinelle) dans top-k.
-    # Ne pas corriger en numeric — ce serait masquer l'anomalie plantée.
     type: categorical
 dataset: accidents_route
 source: OFROU open data (ch.astra.unfaelle-personenschaeden_alle)
