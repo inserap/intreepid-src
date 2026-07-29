@@ -18,7 +18,9 @@ SRC = HERE.parent / "data" / "RoadTrafficAccidentLocations.parquet"
 SEED = HERE / "accidents_seed.parquet"
 N_ROWS = 5000
 SENTINEL_RATE = 0.002  # 0.2% pour la sentinelle vitesse 999
-GEO_SENTINEL_RATE = 0.01  # 1% de coordonnées implausibles (null-island + hors-CH)
+GEO_SENTINEL_RATE = (
+    0.01  # taux nominal ~1% (le taux effectif réel est enregistré dans ground_truth)
+)
 GAP_YEARS = (
     2018,
     2019,
@@ -64,6 +66,7 @@ def main() -> None:
     """)
     # ANOMALIE 1 (sentinelle vitesse) + ANOMALIE 2 (date) + ANOMALIE spatiale.
     # ST_Point(north, east) : E/N inversés -> coordonnées hors emprise CH
+    # Note : date est toujours fixée au 1er du mois (année + mois OFROU)
     con.execute(f"""
         CREATE TABLE seed AS
         SELECT type_route, severity, accident_month, canton,
@@ -181,6 +184,7 @@ def main() -> None:
             "vitesse_limite_kmh": {
                 "type": "categorical",
                 "sens": "vitesse limite (km/h)",
+                "note": "À DESSEIN : révèle la sentinelle 999 dans le top-k",
             },
             "date": {
                 "type": "temporal",

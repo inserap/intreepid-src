@@ -22,6 +22,7 @@ columns:
     sens: type de route (classification OFROU)
     type: categorical
   vitesse_limite_kmh:
+    note: 'À DESSEIN : révèle la sentinelle 999 dans le top-k'
     sens: vitesse limite (km/h)
     type: categorical
 dataset: accidents_route
