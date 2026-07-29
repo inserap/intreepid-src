@@ -88,7 +88,58 @@ def _numeric(con: duckdb.DuckDBPyConnection, table: str, col: str) -> dict[str, 
     }
 
 
-_DISPATCH = {"categorical": _categorical, "numeric": _numeric}
+def _temporal(con: duckdb.DuckDBPyConnection, table: str, col: str) -> dict[str, Any]:
+    c, t = _ident(col), _ident(table)
+    row = con.execute(
+        f"SELECT count(*), count({c}), min({c}), max({c}) FROM {t}"
+    ).fetchone()
+    if row is None:
+        raise RuntimeError(f"profil temporel sans résultat pour {col!r}")
+    n, nn, mn, mx = row
+    gaps = _scalar(
+        con,
+        f"""
+        WITH bornes AS (
+            SELECT date_trunc('month', min({c})) a,
+                   date_trunc('month', max({c})) b
+            FROM {t}
+        ),
+        expected AS (
+            SELECT unnest(generate_series(a, b, INTERVAL 1 MONTH)) m
+            FROM bornes
+        ),
+        present AS (
+            SELECT DISTINCT date_trunc('month', {c}) m
+            FROM {t} WHERE {c} IS NOT NULL
+        )
+        SELECT count(*) FROM expected e LEFT JOIN present p USING (m)
+        WHERE p.m IS NULL
+        """,
+    )
+    season = con.execute(
+        f"SELECT month({c}) mo, count(*) f"
+        f" FROM {t} WHERE {c} IS NOT NULL"
+        f" GROUP BY mo ORDER BY mo"
+    ).fetchall()
+    volume = con.execute(
+        f"SELECT year({c}) y, count(*) f"
+        f" FROM {t} WHERE {c} IS NOT NULL"
+        f" GROUP BY y ORDER BY y"
+    ).fetchall()
+    return {
+        "type": "temporal",
+        "n": n,
+        "null_rate": round((n - nn) / n, 4),
+        "min": str(mn),
+        "max": str(mx),
+        "series_gaps_months": gaps,
+        # clés en str : cohérence direct↔MCP (FastMCP sérialise les clés JSON en str)
+        "seasonality_by_month": {str(int(r[0])): r[1] for r in season},
+        "volume_by_year": {str(int(r[0])): r[1] for r in volume},
+    }
+
+
+_DISPATCH = {"categorical": _categorical, "numeric": _numeric, "temporal": _temporal}
 
 
 def profile_stats(
@@ -107,7 +158,8 @@ def profile_stats(
         fn = _DISPATCH.get(ctype)
         if fn is None:
             raise ValueError(
-                f"type de colonne non supporté dans la brique #1: {ctype!r}"
+                f"type de colonne prévu / non implémenté: {ctype!r}"
+                " (types couverts: categorical, numeric, temporal, spatial)"
             )
         out[col] = fn(con, table, col)
     return out
