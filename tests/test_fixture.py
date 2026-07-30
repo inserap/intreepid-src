@@ -72,3 +72,45 @@ def test_fixture_planted_truths():
     )
     assert out_env > 0
     assert abs(out_env / n - gt["spatial_sentinel"]["rate"]) < 0.002
+
+
+def test_exposure_table_and_hotspots():
+    from intreepid.mcp_server.catalog import load_fiche  # noqa: PLC0415
+    from tests.conftest import FICHE  # noqa: PLC0415
+
+    expo = SEED_PARQUET.parent / "canton_exposure.parquet"
+    assert expo.exists(), "lance d'abord: uv run python fixtures/build_fixture.py"
+
+    gt = yaml.safe_load(GROUND_TRUTH.read_text(encoding="utf-8"))
+    hs = gt["hotspot"]
+    a, b = hs["true_hotspot"], hs["false_hotspot"]
+    assert a != b
+
+    con = duckdb.connect(":memory:")
+    rel = f"read_parquet('{SEED_PARQUET.as_posix()}')"
+    erel = f"read_parquet('{expo.as_posix()}')"
+
+    # le faux point chaud = l'unité au plus gros comptage brut
+    top_unit = scalar(
+        con,
+        f"SELECT canton FROM {rel} GROUP BY canton ORDER BY count(*) DESC LIMIT 1",
+    )
+    assert b == top_unit
+
+    # l'exposition du vrai point chaud est RÉDUITE sous son comptage (excès réel)
+    o_a = scalar(con, f"SELECT count(*) FROM {rel} WHERE canton = '{a}'")
+    w_a = scalar(con, f"SELECT exposure FROM {erel} WHERE canton = '{a}'")
+    assert w_a < o_a
+
+    # toutes les unités des données ont une exposition déclarée
+    missing = scalar(
+        con,
+        f"SELECT count(*) FROM (SELECT DISTINCT canton FROM {rel}) d"
+        f" LEFT JOIN {erel} e USING (canton) WHERE e.canton IS NULL",
+    )
+    assert missing == 0
+
+    # la fiche déclare la convention exposures
+    fiche = load_fiche(FICHE)
+    assert fiche["exposures"]["canton"]["table"] == "canton_exposure.parquet"
+    assert fiche["exposures"]["canton"]["weight"] == "exposure"

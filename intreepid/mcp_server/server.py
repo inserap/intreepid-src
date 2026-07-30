@@ -20,6 +20,7 @@ from intreepid.mcp_server.catalog import (
 from intreepid.mcp_server.catalog import (
     load_fiche,
 )
+from intreepid.mcp_server.concentration import concentration_test as _concentration
 from intreepid.mcp_server.profile_stats import profile_stats as _profile
 
 FIXTURES = Path(__file__).parent.parent.parent / "fixtures"
@@ -52,6 +53,25 @@ def profile_stats(columns: list[str] | None = None) -> dict:
     Jamais de lignes brutes transmises au LLM.
     """
     return _profile(_con, TABLE, _fiche, columns)
+
+
+@mcp.tool
+def concentration_test(
+    unit_col: str, n_permutations: int = 999, seed: int = 42
+) -> dict:
+    """Teste si une unité catégorielle est sur-concentrée vs son exposition.
+
+    Modèle nul par permutation. Read-only : agrégats et pseudo-p, jamais de lignes.
+    """
+    return _concentration(
+        _con,
+        TABLE,
+        _fiche,
+        unit_col,
+        base_dir=FIXTURES,
+        n_permutations=n_permutations,
+        seed=seed,
+    )
 
 
 if __name__ == "__main__":

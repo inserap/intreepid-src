@@ -22,3 +22,11 @@ async def test_describe_tool():
     async with Client(mcp) as client:
         res = await client.call_tool("describe", {})
         assert res.data["dataset"] == "accidents_route"
+
+
+async def test_concentration_tool_over_mcp():
+    async with Client(mcp) as client:
+        res = await client.call_tool("concentration_test", {"unit_col": "canton"})
+        assert res.data["exposure_model"] == "declared:canton_exposure.parquet"
+        assert "unit" in res.data["most_concentrated"]
+        assert "pseudo_p" in res.data["highest_raw_count"]
