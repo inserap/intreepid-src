@@ -25,5 +25,10 @@ columns:
     sens: vitesse limite (km/h)
     type: categorical
 dataset: accidents_route
+exposures:
+  canton:
+    key: canton
+    table: canton_exposure.parquet
+    weight: exposure
 source: OFROU open data (ch.astra.unfaelle-personenschaeden_alle)
 titre: Accidents de la circulation avec dommages corporels (sous-ensemble)

@@ -10,6 +10,12 @@ fake_temporal_pattern:
   claim: la baisse de volume prouve que les routes deviennent plus sûres
   note: la baisse est un artefact de collecte (années retirées) ; causalité non établie
   truth: non fondé
+hotspot:
+  false_hotspot: ZH
+  note: vrai = excès réel après exposition ; faux = plus gros volume mais exposition
+    proportionnelle (volume != excès)
+  true_hotspot: BE
+  unit_col: canton
 row_count: 4314
 sentinel:
   column: vitesse_limite_kmh

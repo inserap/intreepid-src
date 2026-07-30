@@ -25,6 +25,8 @@ GAP_YEARS = (
     2018,
     2019,
 )  # années retirées -> trou de série + rupture de volume (≥2 éléments)
+EXPO = HERE / "canton_exposure.parquet"
+TRUE_HOTSPOT_DIVISOR = 4  # exposition du vrai point chaud = comptage // 4 -> excès réel
 
 # Colonnes réelles OFROU (vérifiées 2026-07-27, 36 colonnes) :
 COLUMN_MAP = {
@@ -118,6 +120,27 @@ def main() -> None:
             OR ST_YMin(geom) NOT BETWEEN 1070000 AND 1300000)
     """)
 
+    # --- Concentration spatiale : exposition par canton + points chauds plantés ---
+    # DEV-ONLY (ne PAS refléter dans la fiche = anti-spoiler Q-0015) :
+    #   base : exposure = comptage réel -> z ~ 0 (aucune concentration) ;
+    #   VRAI point chaud (A, 2e plus gros comptage) : exposition RÉDUITE (//4)
+    #     -> excès réel ;
+    #   FAUX point chaud (B, plus gros comptage) : exposition = comptage
+    #     -> gros volume, pas excès.
+    counts = con.execute(
+        f"SELECT canton, count(*) c FROM {rel} GROUP BY canton ORDER BY c DESC, canton"
+    ).fetchall()
+    b_canton = counts[0][0]  # plus gros comptage brut -> faux point chaud
+    a_canton, a_count = counts[1][0], counts[1][1]  # 2e -> vrai point chaud
+    exposure = {c: cnt for c, cnt in counts}
+    exposure[a_canton] = max(1, a_count // TRUE_HOTSPOT_DIVISOR)
+    values_sql = ", ".join(f"('{c}', {w})" for c, w in exposure.items())
+    con.execute(
+        "CREATE OR REPLACE TABLE canton_exposure(canton TEXT, exposure INTEGER)"
+    )
+    con.execute(f"INSERT INTO canton_exposure VALUES {values_sql}")
+    con.execute(f"COPY canton_exposure TO '{EXPO.as_posix()}' (FORMAT PARQUET)")
+
     gt = {
         "row_count": int(n),
         "severity_cardinality": int(card),
@@ -160,6 +183,15 @@ def main() -> None:
             "note": (
                 "la baisse est un artefact de collecte (années retirées)"
                 " ; causalité non établie"
+            ),
+        },
+        "hotspot": {
+            "unit_col": "canton",
+            "true_hotspot": a_canton,
+            "false_hotspot": b_canton,
+            "note": (
+                "vrai = excès réel après exposition ; faux = plus gros volume mais"
+                " exposition proportionnelle (volume != excès)"
             ),
         },
     }
@@ -209,6 +241,13 @@ def main() -> None:
                 ),
                 "unite": "mètres",
             },
+        },
+        "exposures": {
+            "canton": {
+                "table": "canton_exposure.parquet",
+                "key": "canton",
+                "weight": "exposure",
+            }
         },
     }
     (HERE / "accidents.fiche.yaml").write_text(
