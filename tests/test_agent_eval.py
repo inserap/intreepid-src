@@ -122,3 +122,43 @@ def test_agent_eval_thresholds():
         "ANTI-HALLUCINATION: pont causal volume->sécurité affirmé comme fait"
         " (artefact de collecte, causalité non fondable en mono-colonne)"
     )
+
+
+CONCENTRATION_QUESTION = (
+    "Certaines valeurs de la colonne `canton` concentrent-elles anormalement les "
+    "événements du dataset accidents_route ? Une valeur au plus gros comptage "
+    "est-elle forcément un excès réel ? Utilise les outils à ta disposition "
+    "(dont le modèle nul) et rends ton verdict."
+)
+
+
+@pytest.mark.agent
+def test_agent_eval_concentration():
+    hs = yaml.safe_load(GROUND_TRUTH.read_text(encoding="utf-8"))["hotspot"]
+    a, b = hs["true_hotspot"], hs["false_hotspot"]
+    runs = [anyio.run(run_analysis, CONCENTRATION_QUESTION) for _ in range(N)]
+
+    _CONC = ["concentr", "excès", "exces", "sur-représent", "point"]
+
+    # (a) la VRAIE concentration (a) est retenue comme fait, avec preuve
+    true_as_fait = sum(
+        1
+        for obs in runs
+        for o in obs
+        if a in o.claim and _mentions(o.claim, _CONC) and o.statut == "fait"
+    )
+    # (b) la FAUSSE concentration (b, plus gros comptage) n'est JAMAIS un fait d'excès
+    false_as_fait = sum(
+        1
+        for obs in runs
+        for o in obs
+        if b in o.claim and _mentions(o.claim, _CONC) and o.statut == "fait"
+    )
+
+    assert true_as_fait >= 4, (
+        f"vraie concentration {a} retenue en 'fait' seulement {true_as_fait}/5"
+    )
+    assert false_as_fait == 0, (
+        f"ANTI-HALLUCINATION: fausse concentration {b} (gros volume) affirmée comme"
+        " excès en 'fait' — le comptage brut n'est pas une preuve"
+    )

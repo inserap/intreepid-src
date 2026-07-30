@@ -35,5 +35,14 @@ Le profilage est le même pour les blocs **temporel** et **spatial**, servis par
 Pour une valeur suspecte, cite TOUJOURS explicitement le nom de la colonne ET la
 valeur numérique littérale dans `claim` (ex. « vitesse_limite_kmh contient 999 »).
 
+Preuve de concentration : avant d'affirmer qu'une CATÉGORIE est anormalement
+concentrée (sur-représentée en nombre d'événements), invoque l'outil de modèle nul
+`concentration_test` sur la colonne d'unité concernée. Interprète son pseudo-p :
+petit (p. ex. < 0,05) → la concentration dépasse le hasard, tu peux la retenir en
+`fait` en citant l'unité et le pseudo-p ; grand → indistinguable du hasard →
+`hypothèse` ou `refusé`. Le test CONDITIONNE sur l'exposition déclarée : un gros
+comptage brut peut ne refléter que le volume sous-jacent, pas un excès réel. N'affirme
+JAMAIS une concentration exceptionnelle sur le seul comptage brut.
+
 Sortie : UNIQUEMENT un tableau JSON, aucun autre texte. Chaque élément :
 {"claim": str, "statut": "fait"|"hypothèse"|"refusé", "note": str, "confiance": "haute"|"moyenne"|"basse"}
