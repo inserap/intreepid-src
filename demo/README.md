@@ -24,6 +24,7 @@ runbook**.
 |---|---|---|---|
 | Brique #1 — l'analyste honnête | [`brique-1-analyste-honnete.md`](brique-1-analyste-honnete.md) | proxy statistique (jamais de lignes brutes), refus du faux pattern, isolation P2/P3, preuve en CI | à jour (`v0.2.0`) |
 | Brique #2 — le temps et l'espace | [`brique-2-temps-et-espace.md`](brique-2-temps-et-espace.md) | profil aux 4 types (temporel + spatial), trou de collecte + points hors zone, **double** refus causal, densité différée (H3), preuve en CI | à jour (`v0.3.0`) |
+| Brique #3 — concentration et preuve | [`brique-3-concentration-et-preuve.md`](brique-3-concentration-et-preuve.md) | modèle nul multinomial pondéré, contraste most_concentrated (BE) vs highest_raw_count (ZH), pseudo-p, piège « volume ≠ excès », agnostique au domaine | à jour (`v0.4.0`) |
 
 ## Ajouter une démo
 

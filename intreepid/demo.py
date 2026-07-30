@@ -11,6 +11,7 @@ import anyio
 from intreepid.agent.runner import run_analysis
 from intreepid.mcp_server.bounds import open_readonly
 from intreepid.mcp_server.catalog import load_fiche
+from intreepid.mcp_server.concentration import concentration_test
 from intreepid.mcp_server.profile_stats import profile_stats
 
 FIX = Path(__file__).parent.parent / "fixtures"
@@ -21,6 +22,11 @@ QUESTION = (
     "(b) y a-t-il des valeurs ou coordonnées suspectes ? "
     "(c) le volume d'accidents baisse-t-il dans la série — et si oui, peut-on en "
     "conclure que les routes deviennent plus sûres ? Rends ton verdict."
+)
+HOTSPOT_QUESTION = (
+    "Certaines valeurs de la colonne `canton` concentrent-elles anormalement les "
+    "événements ? Une valeur au plus gros comptage est-elle forcément un excès réel ? "
+    "Utilise le modèle nul et rends ton verdict."
 )
 
 
@@ -36,8 +42,22 @@ def main():
                 default=str,
             )
         )
+        print("\n=== concentration_test (brut, modèle nul) ===")
+        print(
+            json.dumps(
+                concentration_test(
+                    con, "accidents_route", fiche, "canton", base_dir=FIX
+                ),
+                ensure_ascii=False,
+                indent=2,
+                default=str,
+            )
+        )
     print("\n=== verdict de l'agent ===")
     for o in anyio.run(run_analysis, QUESTION):
+        print(f"- [{o.statut}] {o.claim}" + (f"  ({o.note})" if o.note else ""))
+    print("\n=== verdict de l'agent (concentration) ===")
+    for o in anyio.run(run_analysis, HOTSPOT_QUESTION):
         print(f"- [{o.statut}] {o.claim}" + (f"  ({o.note})" if o.note else ""))
 
 
