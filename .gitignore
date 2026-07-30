@@ -1,5 +1,6 @@
 # Local Claude settings (per-user, never shared) — only if the impl has Claude integration
 .claude/settings.local.json
+.claude/settings.json
 
 # Secrets and credentials (NEVER commit)
 .env
