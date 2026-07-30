@@ -106,7 +106,11 @@ Le bloc **spatial** :
   coordonnée. Et on assume le périmètre : la densité par maille est marquée *prévu*, pas
   bricolée. »
 - **À dire (métier) :** « Il lit vos données dans le temps et sur le territoire comme il
-  lisait les catégories — sans que les positions individuelles quittent votre système. »
+  lisait les catégories — mais les positions individuelles **n'entrent jamais dans le
+  modèle** : il ne raisonne que sur des agrégats. Les positions restent dans votre
+  infrastructure et ne sont montrées qu'à vous (à terme sur une carte), jamais transmises
+  au LLM ni à un tiers. » *(Distinguer la frontière LLM — durable — de l'affichage humain,
+  qui est une fonctionnalité à venir, pas une fuite.)*
 
 ### Acte 2 — « Il voit un changement de collecte invisible à l'œil »  (~1,5 min)
 

@@ -181,10 +181,14 @@ def main() -> None:
                 "sens": "gravité la plus élevée parmi les impliqués",
             },
             "accident_month": {"type": "numeric", "sens": "mois de l'accident (1-12)"},
+            # `vitesse_limite_kmh` typée `categorical` À DESSEIN (commentaire DEV,
+            # non exposé à l'agent) : le top-k fait ressortir la sentinelle 999 en
+            # valeur discrète ; en `numeric` elle se diluerait dans les agrégats.
+            # NE PAS ajouter de champ (`note`…) qui la spoilerait : `describe` renvoie
+            # la fiche telle quelle, l'agent doit DÉCOUVRIR 999 seul (Q-0004).
             "vitesse_limite_kmh": {
                 "type": "categorical",
                 "sens": "vitesse limite (km/h)",
-                "note": "À DESSEIN : révèle la sentinelle 999 dans le top-k",
             },
             "date": {
                 "type": "temporal",
