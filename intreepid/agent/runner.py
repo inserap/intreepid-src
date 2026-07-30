@@ -17,6 +17,7 @@ _MCP_TOOLS = [
     "mcp__intreepid__list_datasets",
     "mcp__intreepid__describe",
     "mcp__intreepid__profile_stats",
+    "mcp__intreepid__concentration_test",
 ]
 
 
