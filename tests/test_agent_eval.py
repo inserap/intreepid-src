@@ -6,6 +6,8 @@ trou de série temporel, coordonnées hors emprise CH), signale la concentration
 refuse les faux patterns (gravité×mois ; baisse de volume => routes plus sûres).
 """
 
+import re
+
 import anyio
 import pytest
 import yaml
@@ -124,6 +126,49 @@ def test_agent_eval_thresholds():
     )
 
 
+# Brique #3 : matcher robuste du test de concentration. Piège à éviter : l'agent
+# qui RÉFUTE correctement le faux point chaud dit « [fait] ZH n'est PAS un excès,
+# pseudo-p = 1, sous-représenté » — il cite l'unité + un terme d'excès + statut
+# fait, mais c'est une NÉGATION, pas une affirmation. On distingue donc
+# l'affirmation POSITIVE d'un excès d'une réfutation, via des marqueurs de négation.
+_EXCESS = [
+    "excès",
+    "exces",
+    "sur-concentr",
+    "sur-représent",
+    "sur-represent",
+    "point chaud",
+    "point noir",
+    "anormal",
+]
+_NEG = [
+    "n'est pas",
+    "ne sont pas",
+    "pas un excès",
+    "pas un exces",
+    "sous-représent",
+    "sous-represent",
+    "déficit",
+    "deficit",
+    "négati",
+    "negati",
+    "pseudo-p = 1",
+    "pseudo-p=1",
+    "pseudo-p de 1",
+]
+
+
+def _cites(claim, unit):
+    """True si le claim cite l'unité en tant que token (word-boundary)."""
+    return re.search(rf"\b{re.escape(unit)}\b", claim) is not None
+
+
+def _asserts_excess(o):
+    """True si l'observation AFFIRME positivement un excès (pas une réfutation)."""
+    c = o.claim.lower()
+    return any(t in c for t in _EXCESS) and not any(n in c for n in _NEG)
+
+
 CONCENTRATION_QUESTION = (
     "Certaines valeurs de la colonne `canton` concentrent-elles anormalement les "
     "événements du dataset accidents_route ? Une valeur au plus gros comptage "
@@ -138,21 +183,23 @@ def test_agent_eval_concentration():
     a, b = hs["true_hotspot"], hs["false_hotspot"]
     runs = [anyio.run(run_analysis, CONCENTRATION_QUESTION) for _ in range(N)]
 
-    _CONC = ["concentr", "excès", "exces", "sur-représent", "point"]
-
-    # (a) la VRAIE concentration (a) est retenue comme fait, avec preuve
+    # (a) la VRAIE concentration (a) est AFFIRMÉE comme excès en fait, avec preuve
     true_as_fait = sum(
         1
         for obs in runs
-        for o in obs
-        if a in o.claim and _mentions(o.claim, _CONC) and o.statut == "fait"
+        if any(
+            _cites(o.claim, a) and _asserts_excess(o) and o.statut == "fait"
+            for o in obs
+        )
     )
-    # (b) la FAUSSE concentration (b, plus gros comptage) n'est JAMAIS un fait d'excès
+    # (b) la FAUSSE concentration (b, plus gros comptage brut) n'est JAMAIS affirmée
+    # comme excès en fait. La réfutation « b n'est pas un excès » (statut fait) est
+    # correcte et NE compte PAS ici (gérée par _asserts_excess via les marqueurs _NEG).
     false_as_fait = sum(
         1
         for obs in runs
         for o in obs
-        if b in o.claim and _mentions(o.claim, _CONC) and o.statut == "fait"
+        if _cites(o.claim, b) and _asserts_excess(o) and o.statut == "fait"
     )
 
     assert true_as_fait >= 4, (
