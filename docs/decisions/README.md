@@ -10,7 +10,12 @@ Template : [`TEMPLATE.md`](TEMPLATE.md).
 
 | ID | Titre | Statut |
 |---|---|---|
-| _aucune pour l'instant_ | | |
+| [ADR-0001](0001-socle-duckdb-geoparquet.md) | Socle de données : DuckDB + GeoParquet | Accepted (2026-07-31) |
+| [ADR-0008](0008-code-quality-deviation-pyright-standard.md) | Déviation qualité : pyright `standard` (ratchet vers `strict`) | Accepted (2026-07-31) |
+
+> Trous de numérotation (0002–0007) attendus : ces ADR restent `Proposed` dans le
+> spec repo tant qu'elles ne sont pas acceptées. Les numéros sont immuables et suivent
+> l'ADR sur tout son cycle de vie.
 
 ## Numérotation
 
