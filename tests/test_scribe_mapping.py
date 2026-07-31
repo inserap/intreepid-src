@@ -26,9 +26,13 @@ class _Observation:
     nature: Any = None
 
 
-def _obs(claim: str, statut: str, note: Any = None, confiance: Any = None, nature: Any = None) -> _Observation:
+def _obs(
+    claim: str, statut: str, note: Any = None, confiance: Any = None, nature: Any = None
+) -> _Observation:
     """Create a test observation object."""
-    return _Observation(claim=claim, statut=statut, note=note, confiance=confiance, nature=nature)
+    return _Observation(
+        claim=claim, statut=statut, note=note, confiance=confiance, nature=nature
+    )
 
 
 def test_root_is_first_node():
