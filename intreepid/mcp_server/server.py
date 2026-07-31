@@ -5,6 +5,7 @@ agrégats et métadonnées sont transmis (invariants P2 et P3).
 """
 
 import atexit
+import os
 from contextlib import ExitStack
 from pathlib import Path
 
@@ -23,12 +24,14 @@ from intreepid.mcp_server.catalog import (
 from intreepid.mcp_server.concentration import concentration_test as _concentration
 from intreepid.mcp_server.profile_stats import profile_stats as _profile
 
-FIXTURES = Path(__file__).parent.parent.parent / "fixtures"
-TABLE = "accidents_route"
+CATALOG = Path(__file__).parent.parent.parent / "catalog"
+FICHE = Path(os.environ.get("INTREEPID_FICHE", CATALOG / "accidents_seed.fiche.yaml"))
 
-_fiche = load_fiche(FIXTURES / "accidents.fiche.yaml")
+_fiche = load_fiche(FICHE)
+TABLE = _fiche["dataset"]
+_data = (FICHE.parent / _fiche["data"]).resolve()
 _stack = ExitStack()
-_con = _stack.enter_context(open_readonly(FIXTURES / "accidents_seed.parquet", TABLE))
+_con = _stack.enter_context(open_readonly(_data, TABLE))
 atexit.register(_stack.close)
 
 mcp = FastMCP("intreepid")
@@ -68,7 +71,7 @@ def concentration_test(
         TABLE,
         _fiche,
         unit_col,
-        base_dir=FIXTURES,
+        base_dir=FICHE.parent,
         n_permutations=n_permutations,
         seed=seed,
     )

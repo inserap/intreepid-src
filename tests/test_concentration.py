@@ -11,7 +11,7 @@ import yaml
 
 from intreepid.mcp_server.catalog import load_fiche
 from intreepid.mcp_server.concentration import concentration_test
-from tests.conftest import FICHE, FIXTURES, GROUND_TRUTH, SEED_PARQUET
+from tests.conftest import CATALOG, FICHE, GROUND_TRUTH, SEED_PARQUET
 
 
 def _con():
@@ -31,7 +31,7 @@ def _gt():
 
 def test_true_hotspot_is_significant():
     out = concentration_test(
-        _con(), "accidents_route", load_fiche(FICHE), "canton", base_dir=FIXTURES
+        _con(), "accidents_route", load_fiche(FICHE), "canton", base_dir=CATALOG
     )
     assert out["exposure_model"] == "declared:canton_exposure.parquet"
     assert out["most_concentrated"]["unit"] == _gt()["true_hotspot"]
@@ -40,7 +40,7 @@ def test_true_hotspot_is_significant():
 
 def test_false_hotspot_not_significant():
     out = concentration_test(
-        _con(), "accidents_route", load_fiche(FICHE), "canton", base_dir=FIXTURES
+        _con(), "accidents_route", load_fiche(FICHE), "canton", base_dir=CATALOG
     )
     assert out["highest_raw_count"]["unit"] == _gt()["false_hotspot"]
     assert out["highest_raw_count"]["pseudo_p"] >= 0.05
@@ -50,24 +50,24 @@ def test_uniform_when_no_exposure_declared():
     fiche = load_fiche(FICHE)
     fiche.pop("exposures", None)
     out = concentration_test(
-        _con(), "accidents_route", fiche, "canton", base_dir=FIXTURES
+        _con(), "accidents_route", fiche, "canton", base_dir=CATALOG
     )
     assert out["exposure_model"] == "uniform"
 
 
 def test_reproducible_with_seed():
     a = concentration_test(
-        _con(), "accidents_route", load_fiche(FICHE), "canton", base_dir=FIXTURES
+        _con(), "accidents_route", load_fiche(FICHE), "canton", base_dir=CATALOG
     )
     b = concentration_test(
-        _con(), "accidents_route", load_fiche(FICHE), "canton", base_dir=FIXTURES
+        _con(), "accidents_route", load_fiche(FICHE), "canton", base_dir=CATALOG
     )
     assert a == b
 
 
 def test_output_has_no_raw_rows():
     out = concentration_test(
-        _con(), "accidents_route", load_fiche(FICHE), "canton", base_dir=FIXTURES
+        _con(), "accidents_route", load_fiche(FICHE), "canton", base_dir=CATALOG
     )
     assert set(out) == {
         "unit_col",
@@ -99,7 +99,7 @@ def test_unit_col_must_be_in_fiche():
             "accidents_route",
             load_fiche(FICHE),
             "pas_une_colonne",
-            base_dir=FIXTURES,
+            base_dir=CATALOG,
         )
 
 
@@ -110,7 +110,7 @@ def test_permutations_capped():
         "accidents_route",
         load_fiche(FICHE),
         "canton",
-        base_dir=FIXTURES,
+        base_dir=CATALOG,
         n_permutations=10**9,
     )
     assert out["n_permutations"] <= 9999

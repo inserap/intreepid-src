@@ -58,3 +58,9 @@ logs/
 
 # Raw / staged datasets (large, regenerable — only committed fixtures are tracked)
 data/
+
+# SDD execution scaffolding (controller scratch)
+.superpowers/
+
+# Session stores DuckDB (greffier) — jamais committés
+*.duckdb

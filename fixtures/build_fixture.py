@@ -1,8 +1,9 @@
 """Construit la fixture de test (sous-ensemble OFROU réel + anomalies plantées).
 
-Produit accidents_seed.parquet, ground_truth.yaml et accidents.fiche.yaml de
-façon déterministe (seed fixé). Prérequis : data/RoadTrafficAccidentLocations.parquet
-présent et COLUMN_MAP renseigné. Usage : uv run python fixtures/build_fixture.py
+Produit accidents_seed.parquet, ground_truth.yaml et accidents_seed.fiche.yaml
+(catalog/) de façon déterministe (seed fixé).
+Prérequis : data/RoadTrafficAccidentLocations.parquet présent et COLUMN_MAP
+renseigné. Usage : uv run python fixtures/build_fixture.py
 
 Anomalies plantées : sentinelle 999 (vitesse), trou de série temporel + rupture de
 volume (mois retirés), coordonnées implausibles (null-island (0,0) + hors emprise CH).
@@ -200,9 +201,10 @@ def main() -> None:
     )
 
     fiche = {
-        "dataset": "accidents_route",
+        "dataset": "accidents_seed",
         "titre": "Accidents de la circulation avec dommages corporels (sous-ensemble)",
         "source": "OFROU open data (ch.astra.unfaelle-personenschaeden_alle)",
+        "data": "../fixtures/accidents_seed.parquet",
         "columns": {
             "type_route": {
                 "type": "categorical",
@@ -244,13 +246,15 @@ def main() -> None:
         },
         "exposures": {
             "canton": {
-                "table": "canton_exposure.parquet",
+                "table": "../fixtures/canton_exposure.parquet",
                 "key": "canton",
                 "weight": "exposure",
             }
         },
     }
-    (HERE / "accidents.fiche.yaml").write_text(
+    catalog = HERE.parent / "catalog"
+    catalog.mkdir(parents=True, exist_ok=True)
+    (catalog / "accidents_seed.fiche.yaml").write_text(
         yaml.safe_dump(fiche, allow_unicode=True), encoding="utf-8"
     )
     print(f"OK: {n} lignes -> {SEED.name} (trous={missing}, hors_emprise={out_env})")

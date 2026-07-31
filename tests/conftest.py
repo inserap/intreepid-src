@@ -10,9 +10,10 @@ from typing import Any
 import duckdb
 
 FIXTURES = Path(__file__).parent.parent / "fixtures"
+CATALOG = Path(__file__).parent.parent / "catalog"
 SEED_PARQUET = FIXTURES / "accidents_seed.parquet"
 GROUND_TRUTH = FIXTURES / "ground_truth.yaml"
-FICHE = FIXTURES / "accidents.fiche.yaml"
+FICHE = CATALOG / "accidents_seed.fiche.yaml"
 
 
 def scalar(con: duckdb.DuckDBPyConnection, sql: str) -> Any:
