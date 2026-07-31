@@ -79,6 +79,7 @@ def test_tool_result_parented_to_its_call():
     assert r.kind == "tool_result"
     assert r.parent_id == call.id
     assert r.content["content"] == "agrégat"
+    assert r.content["is_error"] is None
 
 
 def test_verdict_makes_observation_nodes():
@@ -113,6 +114,7 @@ def test_result_message_fills_result_meta_no_node():
     assert nodes == []
     assert b.result_meta["num_turns"] == 3
     assert b.result_meta["terminal_reason"] == "completed"
+    assert b.result_meta["total_cost_usd"] == 0.02
 
 
 def test_seq_is_monotonic_and_ids_deterministic():

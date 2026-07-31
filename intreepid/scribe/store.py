@@ -53,33 +53,37 @@ class Scribe:
     def __enter__(self) -> "Scribe":
         self._path.parent.mkdir(parents=True, exist_ok=True)
         self._con = duckdb.connect(str(self._path))
-        self._con.execute(_SESSIONS_DDL)
-        self._con.execute(_NODES_DDL)
-        exists = self._con.execute(
-            "SELECT 1 FROM sessions WHERE session_id = ?", [self._sid]
-        ).fetchone()
-        if exists is not None:
+        try:
+            self._con.execute(_SESSIONS_DDL)
+            self._con.execute(_NODES_DDL)
+            exists = self._con.execute(
+                "SELECT 1 FROM sessions WHERE session_id = ?", [self._sid]
+            ).fetchone()
+            if exists is not None:
+                raise ValueError(f"session déjà présente (immuable) : {self._sid}")
+            root = self._builder.root
+            self._con.execute(
+                "INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?)",
+                [
+                    self._sid,
+                    root.content["question"],
+                    root.content["model"],
+                    _now(),
+                    None,
+                    "open",
+                    json.dumps({}),
+                ],
+            )
+            self._insert([root])
+        except Exception:
             self._con.close()
             self._con = None
-            raise ValueError(f"session déjà présente (immuable) : {self._sid}")
-        root = self._builder.root
-        self._con.execute(
-            "INSERT INTO sessions VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [
-                self._sid,
-                root.content["question"],
-                root.content["model"],
-                _now(),
-                None,
-                "open",
-                json.dumps({}),
-            ],
-        )
-        self._insert([root])
+            raise
         return self
 
     def _insert(self, nodes: list[TraceNode]) -> None:
-        assert self._con is not None
+        if self._con is None:
+            raise RuntimeError("Scribe utilisé hors de son context manager")
         for n in nodes:
             self._con.execute(
                 "INSERT INTO nodes VALUES (?, ?, ?, ?, ?, ?, ?, ?)",

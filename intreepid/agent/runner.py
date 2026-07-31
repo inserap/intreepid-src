@@ -77,7 +77,7 @@ def _build_options(
     )
 
 
-def _safe(scribe: "Scribe | None", method: str, *args: object) -> None:
+def _safe(scribe: Scribe | None, method: str, *args: object) -> None:
     """Appelle une méthode du scribe en best-effort.
 
     Une panne n'interrompt jamais l'analyste.
@@ -94,6 +94,11 @@ async def run_analysis(
     question: str, model: str | None = "opus", trace_to: str | Path | None = None
 ) -> list[Observation]:
     """Lance l'agent analyste et renvoie son verdict structuré.
+
+    Défaut `model="opus"` : l'analyste est le producteur de valeur, on prend le
+    modèle le plus capable — l'oracle ne teste que le plancher (mensonge, évidences),
+    pas la finesse d'analyse (banc brique #1 : Sonnet passe, Haiku échoue). Passer
+    None pour hériter du CLI, "sonnet"/"haiku" pour override. Modèle par rôle : Q-0013.
 
     Si ``trace_to`` est fourni, le greffier capture la session (arbre immuable
     DuckDB) et le thinking est activé. Sans lui, comportement strictement inchangé.

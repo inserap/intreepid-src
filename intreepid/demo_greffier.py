@@ -26,12 +26,12 @@ def main() -> None:
         verdict = anyio.run(lambda: run_analysis(QUESTION, trace_to=db))
         for o in verdict:
             print(f"- [{o.statut}] {o.claim}")
-        row = (
-            duckdb.connect(str(db), read_only=True)
-            .execute("SELECT session_id FROM sessions")
-            .fetchone()
-        )
-        sid = row[0] if row else None
+        con = duckdb.connect(str(db), read_only=True)
+        try:
+            row = con.execute("SELECT session_id FROM sessions").fetchone()
+        finally:
+            con.close()
+        sid: str | None = str(row[0]) if row else None
         if sid is None:
             raise RuntimeError("No session found in database")
         print("\n=== arbre de session rejoué (load → render) ===")

@@ -78,7 +78,7 @@ class TraceBuilder:
         self._seq += 1
         return node
 
-    def add(self, message: Any) -> list[TraceNode]:
+    def add(self, message: object) -> list[TraceNode]:
         """Mappe un message du flux en 0..N nœuds.
 
         Enfants de la racine, sauf tool_result.
