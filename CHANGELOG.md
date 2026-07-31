@@ -8,6 +8,18 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), et le v
 
 (rien pour l'instant)
 
+## [0.5.0] — 2026-07-31
+
+### Ajouté
+- **Le greffier — capture épisodique de session** (première traversée de la couche mémoire, §10). Package `intreepid/scribe/`, **agnostique au domaine** : `trace.py` (contrat de données Q-0004 — arbre de session `sessions`+`nodes`, mapping **pur** du flux Agent SDK : `thinking`/`tool_call`/`tool_result` apparié via `tool_use_id`/`observation`) ; `store.py` (`Scribe` context manager DuckDB : **écriture incrémentale** — chaque nœud durable dès sa capture —, scellement `closed`/`aborted`+raison à la sortie, **append-only** — une session scellée ou crashée-ouverte ne peut jamais être rouverte ; `load()` réhydrate en read-only, P4) ; `render.py` (arbre ASCII lisible : 💭 raisonnement, 🔧 appels+agrégats, observations avec statuts — les `refusé`/`hypothèse` sont des branches mortes documentées).
+- `run_analysis(question, model, trace_to=None)` : capture **opt-in**. Avec `trace_to`, le flux est dupliqué vers le `Scribe` et le **thinking summarized** est activé (le « pourquoi » entre les appels) ; sans lui, comportement **strictement inchangé** (oracle intact, thinking off). **Non-intrusion** : toute panne du greffier (ouverture, capture, scellement) est loggée et avalée — l'analyste rend toujours son verdict ; son exception à lui est enregistrée comme raison d'`aborted` puis re-propagée.
+- Tests : 59 déterministes (dont non-intrusion/abort à travers le runner, immuabilité sur les 3 états de session, non-régression `trace_to=None`) + 1 test agent bout-en-bout (session réelle capturée, scellée, rejouée — 78 s).
+- Démo : runbook `demo/brique-4-greffier.md` (sorties réelles du 2026-07-31) + driver `demo_greffier.py` (session enregistrée → verdict → arbre rejoué depuis le store).
+
+### Notes
+- Store épisodique = fichier DuckDB **write dédié**, distinct des fixtures sources read-only (P3) ; la trace ne contient que ce que l'agent voit — agrégats, jamais de lignes brutes (P2).
+- Capture au **grain événement**, sans tri à chaud (Q-0003) ; la projection « Action sémantique » est une lecture future. Session = **épisode** de capture ≠ analyse (fil multi-sessions) : la reprise d'une analyse se fera par **référence** (vocabulaire PROV-DM allégé, `wasInformedBy`), jamais par réouverture — extensions Q-0004 (DAG, distillation, rappel MCP) hors périmètre de cette brique.
+
 ## [0.4.0] — 2026-07-30
 
 ### Ajouté
