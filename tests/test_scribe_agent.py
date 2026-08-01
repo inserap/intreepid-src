@@ -12,7 +12,7 @@ from intreepid.scribe.store import load
 
 pytestmark = pytest.mark.agent
 
-QUESTION = "Profile les colonnes du dataset accidents_route et rends ton verdict."
+QUESTION = "Profile les colonnes du dataset accidents_seed et rends ton verdict."
 
 
 async def test_real_session_is_captured(tmp_path):

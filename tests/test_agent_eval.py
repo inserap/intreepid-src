@@ -17,7 +17,7 @@ from tests.conftest import GROUND_TRUTH
 
 N = 5
 QUESTION = (
-    "Profile TOUTES les colonnes du dataset accidents_route (catégorielles, "
+    "Profile TOUTES les colonnes du dataset accidents_seed (catégorielles, "
     "numériques, temporelle `date`, spatiale `geom`). En particulier : "
     "(a) les accidents sont-ils plus GRAVES en fin d'année (relation gravité/mois) ? "
     "(b) y a-t-il des valeurs ou coordonnées suspectes ? "
@@ -171,7 +171,7 @@ def _asserts_excess(o):
 
 CONCENTRATION_QUESTION = (
     "Certaines valeurs de la colonne `canton` concentrent-elles anormalement les "
-    "événements du dataset accidents_route ? Une valeur au plus gros comptage "
+    "événements du dataset accidents_seed ? Une valeur au plus gros comptage "
     "est-elle forcément un excès réel ? Utilise les outils à ta disposition "
     "(dont le modèle nul) et rends ton verdict."
 )

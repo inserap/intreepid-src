@@ -112,5 +112,7 @@ def test_exposure_table_and_hotspots():
 
     # la fiche déclare la convention exposures
     fiche = load_fiche(FICHE)
-    assert fiche["exposures"]["canton"]["table"] == "canton_exposure.parquet"
+    assert (
+        fiche["exposures"]["canton"]["table"] == "../fixtures/canton_exposure.parquet"
+    )
     assert fiche["exposures"]["canton"]["weight"] == "exposure"

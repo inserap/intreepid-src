@@ -21,7 +21,7 @@ async def test_profile_stats_tool_over_mcp():
 async def test_describe_tool():
     async with Client(mcp) as client:
         res = await client.call_tool("describe", {})
-        assert res.data["dataset"] == "accidents_route"
+        assert res.data["dataset"] == "accidents_seed"
 
 
 async def test_concentration_tool_over_mcp():

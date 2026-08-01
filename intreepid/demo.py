@@ -15,8 +15,9 @@ from intreepid.mcp_server.concentration import concentration_test
 from intreepid.mcp_server.profile_stats import profile_stats
 
 FIX = Path(__file__).parent.parent / "fixtures"
+CAT = Path(__file__).parent.parent / "catalog"
 QUESTION = (
-    "Profile TOUTES les colonnes du dataset accidents_route (catégorielles, "
+    "Profile TOUTES les colonnes du dataset accidents_seed (catégorielles, "
     "numériques, temporelle `date`, spatiale `geom`). En particulier : "
     "(a) les accidents sont-ils plus GRAVES en fin d'année (relation gravité/mois) ? "
     "(b) y a-t-il des valeurs ou coordonnées suspectes ? "
@@ -31,7 +32,7 @@ HOTSPOT_QUESTION = (
 
 
 def main():
-    fiche = load_fiche(FIX / "accidents.fiche.yaml")
+    fiche = load_fiche(CAT / "accidents_seed.fiche.yaml")
     with open_readonly(FIX / "accidents_seed.parquet", "accidents_route") as con:
         print("=== profile_stats (brut) ===")
         print(
@@ -46,7 +47,7 @@ def main():
         print(
             json.dumps(
                 concentration_test(
-                    con, "accidents_route", fiche, "canton", base_dir=FIX
+                    con, "accidents_route", fiche, "canton", base_dir=CAT
                 ),
                 ensure_ascii=False,
                 indent=2,

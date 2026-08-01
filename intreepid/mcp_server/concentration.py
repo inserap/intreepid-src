@@ -77,7 +77,7 @@ def concentration_test(
         if absent:
             raise ValueError(f"unités sans exposition déclarée: {absent}")
         weights = np.array([wmap[x] for x in units], dtype=float)
-        exposure_model = f"declared:{decl['table']}"
+        exposure_model = f"declared:{Path(decl['table']).name}"
     else:
         weights = np.ones(len(units), dtype=float)
         exposure_model = "uniform"
