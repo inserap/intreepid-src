@@ -9,7 +9,12 @@ import duckdb
 import pytest
 
 from intreepid.mcp_server.catalog import load_fiche, load_referenced_fiche
-from intreepid.mcp_server.scale_robustness import h3_counts, spatial_col_of
+from intreepid.mcp_server.scale_robustness import (
+    h3_counts,
+    h3_exposure,
+    spatial_col_of,
+    split_cells,
+)
 from tests.conftest import CATALOG, FIXTURES
 
 SPATIAL_FICHE = CATALOG / "spatial_seed.fiche.yaml"
@@ -60,3 +65,18 @@ def test_h3_counts_groups_points_into_cells():
     assert sum(counts.values()) == 70
     assert len(counts) >= 3  # au moins 3 cellules (les 3 clusters)
     assert all(isinstance(k, str) and v > 0 for k, v in counts.items())
+
+
+def test_h3_exposure_aggregates_population():
+    grid_fiche = load_fiche(CATALOG / "population_seed.fiche.yaml")
+    expo = h3_exposure(_con(), grid_fiche, CATALOG, 8, "population")
+    assert sum(expo.values()) == 5020  # 5000 (P) + 20 (E), U absent
+    assert all(v > 0 for v in expo.values())
+
+
+def test_split_cells_separates_unpopulated():
+    obs = {"a": 20, "b": 40, "c": 10}
+    expo = {"a": 5000.0, "b": 20.0}  # c non peuplé
+    testables, unpop = split_cells(obs, expo)
+    assert testables == {"a": 20, "b": 40}
+    assert unpop == {"c": 10}
