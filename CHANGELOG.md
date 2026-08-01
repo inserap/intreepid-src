@@ -8,6 +8,26 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), et le v
 
 (rien pour l'instant)
 
+## [0.7.0] — 2026-08-02
+
+### Ajouté
+- **Robustesse d'échelle spatiale (H3) — l'outil MCP `spatial_scale_robustness`** (Q-0009) : agrège les points d'un dataset en cellules Uber **H3** à plusieurs résolutions (`[6,7,8]`) et teste si une concentration — au-delà d'une **exposition population réelle** (STATPOP hectare) — **survit au changement de maille**. Verdict `robuste`/`fragile`/`absente` + pic descriptif par résolution + caveats d'honnêteté. Première **vraie jointure spatiale** du projet ; le différenciateur volume ≠ excès porté au grain spatial.
+- `intreepid/mcp_server/scale_robustness.py` (**agnostique au domaine**) : agrégation H3 (reprojection SRID→WGS84 en SQL DuckDB, `h3-py` v4), agrégation de l'exposition en cellules H3 (mailles-hectares → points pondérés au centroïde), **null multinomial par résolution** (∝ exposition, réutilise `nullmodel.pseudo_p`), et décomposition des cellules occupées mais **non-peuplées** — exclues du test et **reportées à part** (Q-0016 : pas d'excès fabriqué ; surface les corridors de transit).
+- **Exposition spatiale déclarée par référence** : la fiche du dataset porte `exposures.<colonne> = {kind: spatial_grid, fiche: <grille>, weight: <col>}` ; l'outil résout la **fiche auto-descriptive** de la grille (`catalog.load_referenced_fiche`, garde anti-traversée de chemin). Convention gravée : **clé d'exposition = colonne de jointure du dataset** (`canton` catégoriel, `geom` spatial).
+- **Exposition population réelle** : `prepare/statpop_population.py` (STATPOP hectare BFS 2024, 347 736 mailles, k-anonymat déjà appliqué en amont) + fiche curée `catalog/statpop_population.fiche.yaml` (bloc `grid`, `cell_size`/`coord_ref`). Le raw parquet est un transcodage fidèle du CSV BFS (job ETL amont, hors périmètre).
+- Dépendance : **`h3` (h3-py v4)** — seule dépendance nouvelle.
+- Driver `intreepid/demo_scale_robustness.py` + runbook `demo/brique-6-robustesse-echelle.md` (sorties réelles). Tests `tests/test_scale_robustness.py` (golden déterministe sur fixtures synthétiques : 3 clusters proportionnel/excès/non-peuplé). **84 déterministes verts**, non-régression tenue.
+
+### Modifié
+- **`concentration_test` — abstention par défaut (Q-0016)** : sans exposition déclarée **ni** opt-in uniforme explicite (`{uniform: true}`), l'outil **s'abstient** (`exposure_model: "abstention"`) au lieu de retomber silencieusement sur un null uniforme trompeur (qui ré-introduisait la confusion volume ↔ excès pour des unités inégales).
+- **`std_excess` promu dans `nullmodel.py`** (source unique de l'écart de Poisson standardisé), importé par `concentration.py` et `scale_robustness.py` — fin de la duplication.
+- `intreepid/agent/runner.py` + `intreepid/agent/charter.md` : l'analyste peut appeler `spatial_scale_robustness` (ajout à l'allowlist + paragraphe de charte, honnêteté fait/hypothèse/refusé préservée).
+
+### Notes
+- MINOR : outil additif, aucune rupture d'API. Smoke réel (accidents OFROU × STATPOP) : **5,3 s, verdict `robuste`**, part `unpopulated` 4,18 % à res 8.
+- Réserves gravées (caveats **génériques** dans le code + note **domaine** dans la fiche) : **population ≠ trafic** (une sur-concentration au-delà de la population n'est pas une preuve de dangerosité) ; **biais d'agrégation planaire** pour un phénomène de réseau (Xie & Yan 2008 ; méthodes réseau/NKDE = futur) ; **hiérarchie H3 non-emboîtante** (pic décrit par résolution).
+- Différés (OPEN-QUESTIONS) : hotspots locaux Gi\*/LISA + correction FDR, méthodes réseau (NKDE), exposition **trafic** réelle (Q-0016) ; **plusieurs expositions par colonne de jointure** (Q-0016, `dict`→liste + sélection) ; **dérive d'isolation P3 du runner** — les méta-outils récents du CLI (`ToolSearch`, `TaskCreate`, `Cron*`…) sont hors `disallowed_tools` (nouvelle Q).
+
 ## [0.6.0] — 2026-08-01
 
 ### Ajouté
