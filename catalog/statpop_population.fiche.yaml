@@ -1,0 +1,14 @@
+dataset: statpop_population
+titre: Population résidente par hectare (BFS STATPOP 2024)
+source: BFS GEOSTAT — bevolkerungsstatistik-einwohner (opendata.swiss)
+data: ../data/prepared/statpop_population.parquet
+columns:
+  east: {type: spatial, srid: 2056, unite: mètres, sens: coordonnée E LV95 (coin SW de l'hectare)}
+  north: {type: spatial, srid: 2056, unite: mètres, sens: coordonnée N LV95 (coin SW de l'hectare)}
+  population: {type: numeric, sens: population résidente permanente par hectare (petits comptages supprimés par le BFS)}
+grid:
+  east: east
+  north: north
+  cell_size: 100
+  coord_ref: sw_corner
+note: résidents par hectare — PAS du trafic ; k-anonymat déjà appliqué en amont (BFS).
