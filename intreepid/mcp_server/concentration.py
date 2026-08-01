@@ -4,7 +4,8 @@ Teste si une variable catégorielle (l'« unité ») est sur-concentrée par rap
 une exposition attendue, via redistribution multinomiale aléatoire (contrefactuel).
 Le LLM ne reçoit que des agrégats et un pseudo-p (P2) ; connexion read-only (P3) ;
 seed fixé (P4). Aucune connaissance de domaine : l'exposition est déclarée dans la
-fiche (section `exposures`) ; à défaut, le modèle nul est uniforme.
+fiche (section `exposures`) ; à défaut, abstention (l'uniforme exige un opt-in
+explicite `{uniform: true}` — Q-0016 : pas de null uniforme silencieux trompeur).
 """
 
 from pathlib import Path
