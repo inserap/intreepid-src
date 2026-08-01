@@ -8,6 +8,24 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), et le v
 
 (rien pour l'instant)
 
+## [0.6.0] — 2026-08-01
+
+### Ajouté
+- **Le produit de session — analyste sur le réel + notebook Quarto rejouable** (item v1 #6, §10). Validation de la v1 **de bout en bout sur la vraie donnée OFROU** (267 761 lignes) : l'analyste `opus` tourne via les outils MCP existants (**zéro nouvel outil**), capturé par le greffier, et un **notebook Quarto déterministe** est généré depuis la trace.
+- `intreepid/scribe/notebook.py` (**agnostique au domaine**) : `to_quarto(trace)` — fonction **pure et totale** projetant une `SessionTrace` figée en `.qmd` déterministe (front-matter HTML toc/code-fold/embed-resources ; appels d'outils en blocs `{.json}` + résultats agrégés ; observations en **callouts typés** `fait`→note / `hypothèse`→warning / `refusé`→caution ; pied `meta`). `render_html` **best-effort** (CLI `quarto` absent → `.qmd` seul, dégrade proprement).
+- **Fiche auto-descriptive** + serveur pointé par `INTREEPID_FICHE` : la fiche porte `data:` + `exposures.table` en chemins **relatifs-à-elle-même**, `dataset` = nom de table ; le serveur résout depuis `FICHE.parent` (défaut = fixture ⇒ suite inchangée). Un seul point d'entrée pour basculer fixture ↔ réel.
+- **Ingestion réelle** (`prepare/`, scripts trackés, Parquet gitignorés régénérables) : `accidents_route.py` (projection OFROU brut → analysis-ready, `geom` LV95 + `date`) et `canton_population.py` (exposition = population cantonale BFS, proxy **grossier assumé** ≠ trafic, réserve gravée dans la fiche). La conversion CSV→Parquet reste un job **ETL/FME amont** (hors périmètre).
+- Modèle de données en **3 états** : `data/raw/` (brut fourni) → `data/prepared/` (analysis-ready), tous deux gitignorés ; `catalog/` (fiches curées, trackées) ; `fixtures/` (monde de test déterministe, tracké).
+- Driver `intreepid/demo_notebook.py` + runbook `demo/brique-5-notebook.md` (sorties réelles du 2026-08-01). Tests : `test_notebook` (golden `to_quarto`), `test_prepare`, `test_catalog` (contrat fiche auto-descriptive). **70 déterministes verts**, non-régression tenue.
+
+### Modifié
+- Fiche fixture migrée `fixtures/accidents.fiche.yaml` → `catalog/accidents_seed.fiche.yaml` (dataset renommé `accidents_route` → `accidents_seed`) ; `concentration.py` : label `exposure_model` = nom de fichier.
+
+### Notes
+- **Validation v1 réussie sur du réel** : sur donnée propre, l'analyste conclut honnêtement « aucune anomalie » (posture P6 — pas d'anomalie hallucinée), démontre **volume ≠ excès** (BE sur-concentré vs sa population ; ZH plus gros comptage mais expliqué par l'exposition) et **refuse** l'abus causal (« BE plus dangereux ») faute de dénominateur trafic. Run réel : 6 tours, ~$0,19.
+- Substitut **contrôlé** à Q-0002 (pas encore de vrai destinataire métier) ; ne le résout pas.
+- Follow-ups (non-bloquants) : `demo.py` nom de vue `accidents_route` (cosmétique) ; bruit `ToolSearch` dans la trace (filtre v2) ; Q-0016 (exposition = proxy population, trafic réel = futur) ; Q-0016 raffiné (modèle nul par défaut = **abstention** au lieu d'uniforme, slice dédiée) ; correctif console UTF-8 (Windows cp1252) trouvé au run réel.
+
 ## [0.5.0] — 2026-07-31
 
 ### Ajouté
