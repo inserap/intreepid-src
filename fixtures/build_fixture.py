@@ -2,7 +2,7 @@
 
 Produit accidents_seed.parquet, ground_truth.yaml et accidents_seed.fiche.yaml
 (catalog/) de façon déterministe (seed fixé).
-Prérequis : data/RoadTrafficAccidentLocations.parquet présent et COLUMN_MAP
+Prérequis : data/raw/RoadTrafficAccidentLocations.parquet présent et COLUMN_MAP
 renseigné. Usage : uv run python fixtures/build_fixture.py
 
 Anomalies plantées : sentinelle 999 (vitesse), trou de série temporel + rupture de
@@ -15,7 +15,7 @@ import duckdb
 import yaml
 
 HERE = Path(__file__).parent
-SRC = HERE.parent / "data" / "RoadTrafficAccidentLocations.parquet"
+SRC = HERE.parent / "data" / "raw" / "RoadTrafficAccidentLocations.parquet"
 SEED = HERE / "accidents_seed.parquet"
 N_ROWS = 5000
 SENTINEL_RATE = 0.002  # 0.2% pour la sentinelle vitesse 999

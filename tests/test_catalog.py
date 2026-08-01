@@ -20,3 +20,24 @@ def test_fixture_fiche_self_describes():
 
 def test_catalog_dir_holds_fiche():
     assert (CATALOG / "accidents_seed.fiche.yaml").exists()
+
+
+def test_real_fiche_wellformed():
+    from tests.conftest import CATALOG  # noqa: PLC0415
+
+    fiche = load_fiche(CATALOG / "accidents_route.fiche.yaml")
+    assert fiche["dataset"] == "accidents_route"
+    assert fiche["data"] == "../data/prepared/accidents_route.parquet"
+    expected = {
+        "type_route",
+        "severity",
+        "accident_month",
+        "canton",
+        "implique_pieton",
+        "implique_velo",
+        "implique_moto",
+        "date",
+        "geom",
+    }
+    assert set(fiche["columns"]) == expected
+    assert fiche["exposures"]["canton"]["weight"] == "population"

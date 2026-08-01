@@ -1,0 +1,45 @@
+dataset: accidents_route
+titre: Accidents de la circulation (OFROU, jeu complet)
+source: OFROU open data (ch.astra.unfaelle-personenschaeden_alle)
+data: ../data/prepared/accidents_route.parquet
+columns:
+  type_route:
+    type: categorical
+    sens: type de route (classification OFROU)
+  severity:
+    type: categorical
+    sens: gravité la plus élevée parmi les impliqués
+  accident_month:
+    type: numeric
+    sens: mois de l'accident (1-12)
+  canton:
+    type: categorical
+    sens: canton de l'accident (code officiel)
+  implique_pieton:
+    type: categorical
+    sens: accident impliquant un piéton
+  implique_velo:
+    type: categorical
+    sens: accident impliquant un vélo
+  implique_moto:
+    type: categorical
+    sens: accident impliquant une moto
+  date:
+    type: temporal
+    sens: 'date de l''accident (1er du mois : année + mois OFROU)'
+  geom:
+    type: spatial
+    srid: 2056
+    unite: mètres
+    geometry_type_attendu: point
+    sens: localisation de l'accident (point LV95)
+exposures:
+  canton:
+    table: ../data/prepared/canton_population.parquet
+    key: canton
+    weight: population
+    note: >-
+      Exposition = population résidente cantonale (BFS), proxy GROSSIER : ce
+      n'est PAS le trafic (TMJA national trop lacunaire). Une concentration
+      « au-delà de la population » n'est pas une preuve de dangerosité ;
+      l'interpréter avec cette réserve (dénominateur trafic = travail futur).
