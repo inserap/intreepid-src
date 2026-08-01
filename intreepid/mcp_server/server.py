@@ -23,6 +23,7 @@ from intreepid.mcp_server.catalog import (
 )
 from intreepid.mcp_server.concentration import concentration_test as _concentration
 from intreepid.mcp_server.profile_stats import profile_stats as _profile
+from intreepid.mcp_server.scale_robustness import spatial_scale_robustness as _scale
 
 CATALOG = Path(__file__).parent.parent.parent / "catalog"
 FICHE = Path(os.environ.get("INTREEPID_FICHE", CATALOG / "accidents_seed.fiche.yaml"))
@@ -72,6 +73,26 @@ def concentration_test(
         _fiche,
         unit_col,
         base_dir=FICHE.parent,
+        n_permutations=n_permutations,
+        seed=seed,
+    )
+
+
+@mcp.tool
+def spatial_scale_robustness(
+    resolutions: list[int] | None = None, n_permutations: int = 999, seed: int = 42
+) -> dict:
+    """Robustesse d'une concentration spatiale au changement de maille (H3).
+
+    Agrège les points en cellules H3 à plusieurs résolutions, teste vs une
+    exposition déclarée dans la fiche. Read-only, agrégats only.
+    """
+    return _scale(
+        _con,
+        TABLE,
+        _fiche,
+        base_dir=FICHE.parent,
+        resolutions=tuple(resolutions) if resolutions else (6, 7, 8),
         n_permutations=n_permutations,
         seed=seed,
     )

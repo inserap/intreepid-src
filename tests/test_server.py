@@ -30,3 +30,27 @@ async def test_concentration_tool_over_mcp():
         assert res.data["exposure_model"] == "declared:canton_exposure.parquet"
         assert "unit" in res.data["most_concentrated"]
         assert "pseudo_p" in res.data["highest_raw_count"]
+
+
+def test_spatial_scale_robustness_tool_smoke():
+    import duckdb
+
+    from intreepid.mcp_server.catalog import load_fiche
+    from intreepid.mcp_server.scale_robustness import spatial_scale_robustness
+    from tests.conftest import CATALOG, FIXTURES
+
+    con = duckdb.connect(":memory:")
+    con.execute("INSTALL spatial")
+    con.execute("LOAD spatial")
+    con.execute(
+        "CREATE VIEW spatial_seed AS SELECT * FROM read_parquet("
+        f"'{(FIXTURES / 'spatial_seed.parquet').as_posix()}')"
+    )
+    out = spatial_scale_robustness(
+        con,
+        "spatial_seed",
+        load_fiche(CATALOG / "spatial_seed.fiche.yaml"),
+        base_dir=CATALOG,
+        resolutions=(8,),
+    )
+    assert out["verdict"] in {"robuste", "fragile", "absente"}
