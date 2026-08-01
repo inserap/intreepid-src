@@ -13,7 +13,7 @@ from typing import Any
 import duckdb
 import numpy as np
 
-from intreepid.mcp_server.nullmodel import pseudo_p
+from intreepid.mcp_server.nullmodel import pseudo_p, std_excess
 
 _MAX_PERMUTATIONS = 9999  # cap dur (borne défensive, esprit TOP_K de profile_stats)
 _DEFAULT_PERMUTATIONS = 999  # défaut raisonnable : précision ~1/1000, < 1 s
@@ -23,12 +23,6 @@ def _ident(name: str) -> str:
     if not name.replace("_", "").isalnum():
         raise ValueError(f"nom de colonne invalide: {name!r}")
     return f'"{name}"'
-
-
-def _std_excess(observed: np.ndarray, expected: np.ndarray) -> np.ndarray:
-    """Écart de Poisson standardisé (observed - expected)/sqrt(expected), 0 si E<=0."""
-    with np.errstate(divide="ignore", invalid="ignore"):
-        return np.where(expected > 0, (observed - expected) / np.sqrt(expected), 0.0)
 
 
 def _unit(units, observed, expected, z, i, pseudo):
@@ -97,7 +91,7 @@ def concentration_test(
         raise ValueError("exposition nulle ou négative interdite (w_u > 0 requis)")
     p = weights / weights.sum()
     expected = n_total * p
-    z = _std_excess(observed, expected)
+    z = std_excess(observed, expected)
     i_most = int(np.argmax(z))
     i_raw = int(np.argmax(observed))
     t_obs = float(z[i_most])
@@ -108,7 +102,7 @@ def concentration_test(
     zb_sim = np.empty(n_permutations)
     for r in range(n_permutations):
         sim = rng.multinomial(n_total, p).astype(float)
-        zsim = _std_excess(sim, expected)
+        zsim = std_excess(sim, expected)
         t_sim[r] = zsim.max()
         zb_sim[r] = zsim[i_raw]
 

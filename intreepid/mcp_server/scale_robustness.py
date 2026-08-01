@@ -13,6 +13,21 @@ from typing import Any
 
 import duckdb
 import h3
+import numpy as np
+
+from intreepid.mcp_server.catalog import load_referenced_fiche
+from intreepid.mcp_server.nullmodel import pseudo_p, std_excess
+
+_CAVEATS = [
+    "Le null est proportionnel à l'exposition déclarée dans la fiche : une "
+    "concentration au-delà de cette exposition n'est pas une preuve de "
+    "causalité (l'exposition déclarée n'est pas nécessairement le facteur "
+    "explicatif du phénomène).",
+    "Agrégation planaire H3 : biaisée pour un phénomène contraint à un réseau "
+    "1-D plutôt qu'étalé dans le plan (cf. Xie & Yan 2008, densité de réseau).",
+    "Hiérarchie H3 non-emboîtante : l'identité d'une cellule d'une résolution "
+    "à l'autre n'est pas affirmée ; le pic est décrit par résolution.",
+]
 
 
 def spatial_col_of(fiche: dict[str, Any]) -> str:
@@ -63,7 +78,7 @@ def h3_exposure(
     resolution: int,
     weight_col: str,
 ) -> dict[str, float]:
-    """Agrège une grille de population (points-mailles) en cellules H3.
+    """Agrège une grille d'exposition (points-mailles pondérés) en cellules H3.
 
     `weight_col` est fourni par le lien d'exposition (`exposures.<col>.weight`),
     jamais inféré : le consommateur choisit la colonne de poids.
@@ -95,3 +110,97 @@ def split_cells(
     testables = {c: o for c, o in obs.items() if expo.get(c, 0.0) > 0.0}
     unpop = {c: o for c, o in obs.items() if expo.get(c, 0.0) <= 0.0}
     return testables, unpop
+
+
+def spatial_scale_robustness(
+    con: duckdb.DuckDBPyConnection,
+    table: str,
+    fiche: dict[str, Any],
+    *,
+    base_dir: "str | Path",
+    resolutions: "tuple[int, ...]" = (6, 7, 8),
+    n_permutations: int = 999,
+    seed: int = 42,
+) -> dict[str, Any]:
+    """Teste la robustesse d'échelle d'une concentration spatiale sur grille H3."""
+    spatial_col = spatial_col_of(fiche)
+    srid = int(fiche["columns"][spatial_col]["srid"])
+    decl = fiche.get("exposures", {}).get(spatial_col)
+    if not decl or decl.get("kind") != "spatial_grid":
+        return {
+            "spatial_col": spatial_col,
+            "exposure_model": "abstention",
+            "reason": "robustesse non évaluable sans exposition spatiale déclarée",
+            "resolutions": list(resolutions),
+        }
+    grid_fiche = load_referenced_fiche(base_dir, decl["fiche"])
+    weight_col = decl["weight"]
+
+    per: list[dict[str, Any]] = []
+    rng = np.random.default_rng(seed)
+    for res in resolutions:
+        obs = h3_counts(con, table, spatial_col, srid, res)
+        expo = h3_exposure(con, grid_fiche, base_dir, res, weight_col)
+        testables, unpop = split_cells(obs, expo)
+        cells = sorted(testables)
+        unpop_block: dict[str, Any] = {
+            "n_cells": len(unpop),
+            "n_points": int(sum(unpop.values())),
+            "share": round(sum(unpop.values()) / max(1, sum(obs.values())), 4),
+        }
+        if not cells:
+            per.append(
+                {
+                    "resolution": res,
+                    "n_cells_tested": 0,
+                    "n_total_tested": 0,
+                    "pic": None,
+                    "pseudo_p": None,
+                    "significant": False,
+                    "unpopulated": unpop_block,
+                }
+            )
+            continue
+        o = np.array([testables[c] for c in cells], dtype=float)
+        w = np.array([expo[c] for c in cells], dtype=float)
+        n_total = int(o.sum())
+        p = w / w.sum()
+        expected = n_total * p
+        z = std_excess(o, expected)
+        i_pic = int(np.argmax(z))
+        t_obs = float(z[i_pic])
+        t_sim = np.empty(n_permutations)
+        for r in range(n_permutations):
+            sim = rng.multinomial(n_total, p).astype(float)
+            t_sim[r] = std_excess(sim, expected).max()
+        pp = pseudo_p(t_sim, t_obs)
+        lat, lng = h3.cell_to_latlng(cells[i_pic])
+        per.append(
+            {
+                "resolution": res,
+                "n_cells_tested": len(cells),
+                "n_total_tested": n_total,
+                "pic": {
+                    "h3": cells[i_pic],
+                    "lat": round(float(lat), 5),
+                    "lng": round(float(lng), 5),
+                    "std_excess": round(t_obs, 2),
+                },
+                "pseudo_p": round(pp, 4),
+                "significant": pp <= 0.05,
+                "unpopulated": unpop_block,
+            }
+        )
+
+    sig = [r["significant"] for r in per]
+    verdict = "robuste" if all(sig) else ("absente" if not any(sig) else "fragile")
+    return {
+        "spatial_col": spatial_col,
+        "exposure_model": f"declared:{decl['fiche']}",
+        "resolutions": list(resolutions),
+        "seed": seed,
+        "n_permutations": n_permutations,
+        "verdict": verdict,
+        "per_resolution": per,
+        "caveats": _CAVEATS,
+    }
