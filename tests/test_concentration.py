@@ -46,13 +46,25 @@ def test_false_hotspot_not_significant():
     assert out["highest_raw_count"]["pseudo_p"] >= 0.05
 
 
-def test_uniform_when_no_exposure_declared():
+def test_abstention_when_no_exposure_declared():
     fiche = load_fiche(FICHE)
     fiche.pop("exposures", None)
     out = concentration_test(
         _con(), "accidents_route", fiche, "canton", base_dir=CATALOG
     )
-    assert out["exposure_model"] == "uniform"
+    assert out["exposure_model"] == "abstention"
+    assert "most_concentrated" not in out  # pas de verdict trompeur
+    assert out["n_total"] > 0
+
+
+def test_uniform_opt_in_is_explicit():
+    fiche = load_fiche(FICHE)
+    fiche["exposures"] = {"canton": {"uniform": True}}
+    out = concentration_test(
+        _con(), "accidents_route", fiche, "canton", base_dir=CATALOG
+    )
+    assert out["exposure_model"] == "uniform:declared"
+    assert out["most_concentrated"]["unit"]  # le test tourne bien
 
 
 def test_reproducible_with_seed():

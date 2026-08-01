@@ -66,7 +66,10 @@ def concentration_test(
         raise ValueError("aucune ligne : test de concentration impossible")
 
     decl = fiche.get("exposures", {}).get(unit_col)
-    if decl:
+    if decl and decl.get("uniform") is True:
+        weights = np.ones(len(units), dtype=float)
+        exposure_model = "uniform:declared"
+    elif decl:
         path = (Path(base_dir) / decl["table"]).as_posix()
         wrows = con.execute(
             f"SELECT {_ident(decl['key'])} AS k, {_ident(decl['weight'])} AS w"
@@ -79,8 +82,14 @@ def concentration_test(
         weights = np.array([wmap[x] for x in units], dtype=float)
         exposure_model = f"declared:{Path(decl['table']).name}"
     else:
-        weights = np.ones(len(units), dtype=float)
-        exposure_model = "uniform"
+        return {
+            "unit_col": unit_col,
+            "exposure_model": "abstention",
+            "reason": "sur-concentration non évaluable sans exposition déclarée "
+            "(ni table d'exposition, ni opt-in uniforme explicite)",
+            "n_units": len(units),
+            "n_total": n_total,
+        }
 
     # S4 : une exposition nulle/négative rendrait E_u=0 pour une unité pourtant
     # observée -> son excès serait silencieusement masqué. Contrat : w_u > 0.
