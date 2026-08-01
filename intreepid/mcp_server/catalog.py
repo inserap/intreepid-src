@@ -14,6 +14,13 @@ def load_fiche(path: str | Path) -> dict[str, Any]:
     return yaml.safe_load(Path(path).read_text(encoding="utf-8"))
 
 
+def load_referenced_fiche(catalog_dir: str | Path, name: str) -> dict[str, Any]:
+    """Charge une fiche référencée par nom (`catalog/<name>.fiche.yaml`)."""
+    if not name.replace("_", "").isalnum():
+        raise ValueError(f"nom de fiche invalide: {name!r}")
+    return load_fiche(Path(catalog_dir) / f"{name}.fiche.yaml")
+
+
 def list_datasets(fiche: dict[str, Any]) -> list[str]:
     return [fiche["dataset"]]
 

@@ -6,8 +6,9 @@ des cellules sans population, verdict, déterminisme, sortie sans lignes (P2).
 """
 
 import duckdb
+import pytest
 
-from intreepid.mcp_server.catalog import load_fiche
+from intreepid.mcp_server.catalog import load_fiche, load_referenced_fiche
 from tests.conftest import CATALOG, FIXTURES
 
 SPATIAL_FICHE = CATALOG / "spatial_seed.fiche.yaml"
@@ -24,6 +25,16 @@ def _con():
         f" read_parquet('{SPATIAL_PARQUET.as_posix()}')"
     )
     return con
+
+
+def test_load_referenced_fiche():
+    pop = load_referenced_fiche(CATALOG, "population_seed")
+    assert pop["dataset"] == "population_seed"
+
+
+def test_load_referenced_fiche_rejects_bad_name():
+    with pytest.raises(ValueError):
+        load_referenced_fiche(CATALOG, "../secret")
 
 
 def test_fixtures_exist_and_schema():
