@@ -1,0 +1,23 @@
+columns:
+  east:
+    sens: coordonnée E LV95 (coin SW de la maille)
+    srid: 2056
+    type: spatial
+    unite: mètres
+  north:
+    sens: coordonnée N LV95 (coin SW de la maille)
+    srid: 2056
+    type: spatial
+    unite: mètres
+  population:
+    sens: population par maille (synthétique)
+    type: numeric
+data: ../fixtures/population_seed.parquet
+dataset: population_seed
+grid:
+  cell_size: 100
+  coord_ref: sw_corner
+  east: east
+  north: north
+note: 'fixture : population par maille, PAS du trafic.'
+titre: Grille de population synthétique (fixture)
