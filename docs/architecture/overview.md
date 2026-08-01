@@ -1,4 +1,4 @@
-# intreepid — Vision architecturale (v0.2)
+# intreepid — Vision architecturale (v0.3)
 
 > **Objet** : workspace de découverte analytique (exploration de données géospatiales ou non en dialogue avec des agents LLM).
 > **Statut** : proposition pour validation — aucune implémentation engagée.
@@ -11,6 +11,7 @@
 |---------|------|---------------|
 | v0.1 | 2026-07-25 | Vision initiale : couches, boucle de découverte, charte des agents, arbre-carte, collaboration, périmètre v1/v2 |
 | v0.2 | 2026-07-25 | Ajouts : rôle **curateur**, outil **`profile_stats`**, **couche modélisation ML** + cas pilote accidents, principe **P9**, **modèle de persistance de la mémoire** |
+| v0.3 | 2026-08-02 | Ajout : **Contrat d'interrogation** (§1) — question libre, réponse qualifiée, accompagnement maïeutique ; renfort de la posture fondatrice |
 
 ---
 
@@ -40,9 +41,48 @@ la solution :
 ### Le rôle des LLM (posture fondatrice)
 
 Les LLM sont là pour **aider, orienter, challenger, imaginer, proposer,
-corriger, réorienter** — jamais pour remplacer le calcul déterministe ni le
-jugement métier. Ils s'adaptent et évoluent par les expériences auxquelles
-ils sont confrontés (voir P9 et §10).
+corriger, réorienter, reformuler la question** — jamais pour remplacer le
+calcul déterministe ni le jugement métier. Ils s'adaptent et évoluent par les
+expériences auxquelles ils sont confrontés (voir P9 et §10).
+
+### Le contrat d'interrogation
+
+> **intreepid ne bride pas la question ; il y répond, la qualifie, et aide à
+> la reformuler — jusqu'au bout de ce qu'on peut savoir, et de ce qu'il
+> faudrait pour en savoir plus.**
+
+Le différenciateur n'est ni *trouver des insights* ni *répondre à des
+questions* (l'un et l'autre commoditisés : un LLM générique câblé à un DuckDB
+MCP les fait). Il est double :
+
+1. **Réponse qualifiée (défensif — ne jamais mentir).** L'interrogation est
+   **libre** : on ne met pas de limite à ce qu'on a le droit de demander. La
+   *réponse*, elle, porte sa charge épistémique — ce qu'elle est (certitudes),
+   ce qu'elle n'est pas (ce qu'on pourrait y lire à tort), et les doutes entre
+   les deux. L'« abstention » n'est **pas** un non-réponse : *« voici le
+   comptage — fait ; mais "plus dangereux" ne suit pas sans exposition trafic
+   → la donnée ne tranche pas, et voici pourquoi »* est **plus** d'information,
+   pas moins. C'est P6 poussé au bout. Une question « simple » ne l'est qu'en
+   surface (« plus d'accidents la nuit ? » cache « plus *dangereux* la
+   nuit ? ») — et même le comptage brut reste non-trivial car la **fiche** le
+   protège (sentinelle `999` ≠ 999 km/h ; k-anonymat des cellules rares, §4 /
+   P8).
+2. **Accompagnement maïeutique (génératif — améliorer la question).** Le
+   système répond à la question *posée*, puis **révèle la question qu'il
+   fallait poser** et propose le chemin (« … et cette exposition, c'est le
+   trafic nocturne ; on va la chercher ? » — rejoint le scoutisme de données).
+   C'est ici qu'intreepid cesse d'être un DuckDB honnête pour devenir un
+   *compagnon d'analyse*. Trois garde-fous non négociables : **répondre
+   d'abord, reformuler ensuite** (jamais de péage avant le fait dû) ;
+   **proposer sans imposer** (l'humain reste le pilote) ; **émerger de la
+   fiche, pas d'un script** (l'écart « question posée ↔ question juste » se
+   *déduit* de l'exposition déclarée/manquante — pas de reformulation câblée,
+   cf. `no-hard-coded-scenarios`).
+
+> Cette posture est une **manière d'être** de l'analyste, pas un organe : elle
+> ne se valide qu'avec un vrai destinataire posant une vraie question (Q-0002
+> du spec). L'embryon existe déjà (le refus causal motivé de la brique #5) ;
+> son extension est une direction produit, pas un chantier engagé (Q-0020).
 
 ### Anti-objectifs
 
