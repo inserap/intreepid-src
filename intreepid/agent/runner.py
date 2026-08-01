@@ -24,6 +24,7 @@ _MCP_TOOLS = [
     "mcp__intreepid__describe",
     "mcp__intreepid__profile_stats",
     "mcp__intreepid__concentration_test",
+    "mcp__intreepid__spatial_scale_robustness",
 ]
 
 
@@ -35,7 +36,7 @@ def _build_options(
     Config retenue (VÉRIFIÉE EMPIRIQUEMENT par smoke, pas par lecture de source) :
     - disallowed_tools  → retire les built-ins fichier/shell/web + Skill du contexte
                           (barrière PRINCIPALE ; smoke : Bash/Read bloqués, MCP OK)
-    - allowed_tools     → auto-approuve UNIQUEMENT les 3 outils MCP intreepid
+    - allowed_tools     → auto-approuve UNIQUEMENT les outils MCP intreepid
     - strict_mcp_config → ignore les serveurs MCP ambiants (~/.claude, .mcp.json…)
     - setting_sources=[] → ignore les settings utilisateur/projet (pas de skills tiers)
     - skills=[]         → aucune skill injectée
@@ -45,7 +46,7 @@ def _build_options(
     """
     return ClaudeAgentOptions(
         model=model,  # None → défaut CLI (hérite la session) ; sinon "sonnet"/"haiku"
-        allowed_tools=_MCP_TOOLS,  # auto-approuve uniquement les 3 outils MCP
+        allowed_tools=_MCP_TOOLS,  # auto-approuve uniquement les outils MCP intreepid
         disallowed_tools=[  # barrière principale : retire les built-ins du contexte
             "Bash",
             "Read",

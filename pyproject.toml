@@ -9,6 +9,7 @@ dependencies = [
     "pydantic>=2",
     "pyyaml",
     "numpy",
+    "h3>=4.5.0",
 ]
 
 [project.optional-dependencies]

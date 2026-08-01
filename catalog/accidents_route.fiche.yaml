@@ -43,3 +43,11 @@ exposures:
       n'est PAS le trafic (TMJA national trop lacunaire). Une concentration
       « au-delà de la population » n'est pas une preuve de dangerosité ;
       l'interpréter avec cette réserve (dénominateur trafic = travail futur).
+  geom:
+    kind: spatial_grid
+    fiche: statpop_population
+    weight: population
+    note: >-
+      Population = proxy GROSSIER de l'exposition accident, PAS le trafic. Les axes
+      de transit (peu peuplés) ressortiront en cellules « sans population » —
+      indéfini, pas une preuve de danger.

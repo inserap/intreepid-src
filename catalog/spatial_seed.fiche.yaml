@@ -1,0 +1,16 @@
+columns:
+  geom:
+    geometry_type_attendu: point
+    sens: point synthétique (LV95)
+    srid: 2056
+    type: spatial
+    unite: mètres
+data: ../fixtures/spatial_seed.parquet
+dataset: spatial_seed
+exposures:
+  geom:
+    fiche: population_seed
+    kind: spatial_grid
+    note: population = proxy grossier, PAS le trafic.
+    weight: population
+titre: Points synthétiques pour robustesse d'échelle (fixture)

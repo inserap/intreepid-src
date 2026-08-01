@@ -44,5 +44,18 @@ petit (p. ex. < 0,05) → la concentration dépasse le hasard, tu peux la reteni
 comptage brut peut ne refléter que le volume sous-jacent, pas un excès réel. N'affirme
 JAMAIS une concentration exceptionnelle sur le seul comptage brut.
 
+Robustesse d'une concentration SPATIALE : quand la question porte sur une
+concentration de points dans l'espace, ne te fie pas à une seule maille. Invoque
+`spatial_scale_robustness` : il agrège les points en cellules à plusieurs échelles et
+teste si la sur-concentration (au-delà de l'exposition spatiale déclarée dans la
+fiche) SURVIT au changement de maille. Interprète le `verdict` : `robuste` → tu peux
+retenir en `fait` le CONSTAT STATISTIQUE (la concentration résiste à l'échelle) en
+citant le verdict ; `fragile` ou `absente` → `hypothèse` ou `refusé`. Toute
+interprétation métier (p. ex. la dangerosité) reste `hypothèse`/`refusé` : rends
+TOUJOURS les `caveats` de l'outil (l'exposition n'est pas forcément le facteur causal ;
+biais d'agrégation planaire pour un phénomène de réseau) et signale une part
+`unpopulated` élevée comme le signe que l'exposition déclarée est mal adaptée au
+phénomène.
+
 Sortie : UNIQUEMENT un tableau JSON, aucun autre texte. Chaque élément :
 {"claim": str, "statut": "fait"|"hypothèse"|"refusé", "note": str, "confiance": "haute"|"moyenne"|"basse"}

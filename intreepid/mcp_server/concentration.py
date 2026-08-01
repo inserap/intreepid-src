@@ -4,7 +4,8 @@ Teste si une variable catégorielle (l'« unité ») est sur-concentrée par rap
 une exposition attendue, via redistribution multinomiale aléatoire (contrefactuel).
 Le LLM ne reçoit que des agrégats et un pseudo-p (P2) ; connexion read-only (P3) ;
 seed fixé (P4). Aucune connaissance de domaine : l'exposition est déclarée dans la
-fiche (section `exposures`) ; à défaut, le modèle nul est uniforme.
+fiche (section `exposures`) ; à défaut, abstention (l'uniforme exige un opt-in
+explicite `{uniform: true}` — Q-0016 : pas de null uniforme silencieux trompeur).
 """
 
 from pathlib import Path
@@ -13,7 +14,7 @@ from typing import Any
 import duckdb
 import numpy as np
 
-from intreepid.mcp_server.nullmodel import pseudo_p
+from intreepid.mcp_server.nullmodel import pseudo_p, std_excess
 
 _MAX_PERMUTATIONS = 9999  # cap dur (borne défensive, esprit TOP_K de profile_stats)
 _DEFAULT_PERMUTATIONS = 999  # défaut raisonnable : précision ~1/1000, < 1 s
@@ -23,12 +24,6 @@ def _ident(name: str) -> str:
     if not name.replace("_", "").isalnum():
         raise ValueError(f"nom de colonne invalide: {name!r}")
     return f'"{name}"'
-
-
-def _std_excess(observed: np.ndarray, expected: np.ndarray) -> np.ndarray:
-    """Écart de Poisson standardisé (observed - expected)/sqrt(expected), 0 si E<=0."""
-    with np.errstate(divide="ignore", invalid="ignore"):
-        return np.where(expected > 0, (observed - expected) / np.sqrt(expected), 0.0)
 
 
 def _unit(units, observed, expected, z, i, pseudo):
@@ -66,7 +61,10 @@ def concentration_test(
         raise ValueError("aucune ligne : test de concentration impossible")
 
     decl = fiche.get("exposures", {}).get(unit_col)
-    if decl:
+    if decl and decl.get("uniform") is True:
+        weights = np.ones(len(units), dtype=float)
+        exposure_model = "uniform:declared"
+    elif decl:
         path = (Path(base_dir) / decl["table"]).as_posix()
         wrows = con.execute(
             f"SELECT {_ident(decl['key'])} AS k, {_ident(decl['weight'])} AS w"
@@ -79,8 +77,14 @@ def concentration_test(
         weights = np.array([wmap[x] for x in units], dtype=float)
         exposure_model = f"declared:{Path(decl['table']).name}"
     else:
-        weights = np.ones(len(units), dtype=float)
-        exposure_model = "uniform"
+        return {
+            "unit_col": unit_col,
+            "exposure_model": "abstention",
+            "reason": "sur-concentration non évaluable sans exposition déclarée "
+            "(ni table d'exposition, ni opt-in uniforme explicite)",
+            "n_units": len(units),
+            "n_total": n_total,
+        }
 
     # S4 : une exposition nulle/négative rendrait E_u=0 pour une unité pourtant
     # observée -> son excès serait silencieusement masqué. Contrat : w_u > 0.
@@ -88,7 +92,7 @@ def concentration_test(
         raise ValueError("exposition nulle ou négative interdite (w_u > 0 requis)")
     p = weights / weights.sum()
     expected = n_total * p
-    z = _std_excess(observed, expected)
+    z = std_excess(observed, expected)
     i_most = int(np.argmax(z))
     i_raw = int(np.argmax(observed))
     t_obs = float(z[i_most])
@@ -99,7 +103,7 @@ def concentration_test(
     zb_sim = np.empty(n_permutations)
     for r in range(n_permutations):
         sim = rng.multinomial(n_total, p).astype(float)
-        zsim = _std_excess(sim, expected)
+        zsim = std_excess(sim, expected)
         t_sim[r] = zsim.max()
         zb_sim[r] = zsim[i_raw]
 

@@ -258,6 +258,102 @@ def main() -> None:
         yaml.safe_dump(fiche, allow_unicode=True), encoding="utf-8"
     )
     print(f"OK: {n} lignes -> {SEED.name} (trous={missing}, hors_emprise={out_env})")
+    build_spatial_fixtures()
+
+
+def build_spatial_fixtures() -> None:
+    """Fixture spatiale synthétique : 3 clusters (proportionnel/excès/non-peuplé)."""
+    con = duckdb.connect(":memory:")
+    con.execute("INSTALL spatial")
+    con.execute("LOAD spatial")
+    # Points : (n, e0, n0) par cluster ; jitter déterministe fixe (pas de random).
+    clusters = [
+        (20, 2_600_000, 1_200_000),
+        (40, 2_604_000, 1_200_000),
+        (10, 2_608_000, 1_200_000),
+    ]
+    rows = []
+    for n, e0, n0 in clusters:
+        for i in range(n):
+            rows.append((e0 + (i % 5) * 10.0, n0 + (i // 5) * 10.0))
+    values = ", ".join(f"(ST_Point({e}, {nn}))" for e, nn in rows)
+    con.execute("CREATE TABLE spatial_seed(geom GEOMETRY)")
+    con.execute(f"INSERT INTO spatial_seed VALUES {values}")
+    con.execute(
+        f"COPY spatial_seed TO '{(HERE / 'spatial_seed.parquet').as_posix()}'"
+        " (FORMAT PARQUET)"
+    )
+    # Population : maille hectare (coin SW) sur P (haute) et E (basse) ; RIEN sur U.
+    pop_rows = [(2_600_000, 1_200_000, 5000), (2_604_000, 1_200_000, 20)]
+    pvalues = ", ".join(f"({e}, {nn}, {p})" for e, nn, p in pop_rows)
+    con.execute(
+        "CREATE TABLE population_seed(east DOUBLE, north DOUBLE, population INTEGER)"
+    )
+    con.execute(f"INSERT INTO population_seed VALUES {pvalues}")
+    con.execute(
+        f"COPY population_seed TO '{(HERE / 'population_seed.parquet').as_posix()}'"
+        " (FORMAT PARQUET)"
+    )
+    catalog = HERE.parent / "catalog"
+    pop_fiche = {
+        "dataset": "population_seed",
+        "titre": "Grille de population synthétique (fixture)",
+        "data": "../fixtures/population_seed.parquet",
+        "columns": {
+            "east": {
+                "type": "spatial",
+                "srid": 2056,
+                "unite": "mètres",
+                "sens": "coordonnée E LV95 (coin SW de la maille)",
+            },
+            "north": {
+                "type": "spatial",
+                "srid": 2056,
+                "unite": "mètres",
+                "sens": "coordonnée N LV95 (coin SW de la maille)",
+            },
+            "population": {
+                "type": "numeric",
+                "sens": "population par maille (synthétique)",
+            },
+        },
+        "grid": {
+            "east": "east",
+            "north": "north",
+            "cell_size": 100,
+            "coord_ref": "sw_corner",
+        },
+        "note": "fixture : population par maille, PAS du trafic.",
+    }
+    (catalog / "population_seed.fiche.yaml").write_text(
+        yaml.safe_dump(pop_fiche, allow_unicode=True), encoding="utf-8"
+    )
+    spatial_fiche = {
+        "dataset": "spatial_seed",
+        "titre": "Points synthétiques pour robustesse d'échelle (fixture)",
+        "data": "../fixtures/spatial_seed.parquet",
+        "columns": {
+            "geom": {
+                "type": "spatial",
+                "srid": 2056,
+                "geometry_type_attendu": "point",
+                "sens": "point synthétique (LV95)",
+                "unite": "mètres",
+            },
+        },
+        "exposures": {
+            "geom": {
+                "kind": "spatial_grid",
+                "fiche": "population_seed",
+                "weight": "population",
+                "note": "population = proxy grossier, PAS le trafic.",
+            },
+        },
+    }
+    (catalog / "spatial_seed.fiche.yaml").write_text(
+        yaml.safe_dump(spatial_fiche, allow_unicode=True), encoding="utf-8"
+    )
+    print("OK: spatial_seed.parquet + population_seed.parquet + fiches générés.")
 
 
 if __name__ == "__main__":
