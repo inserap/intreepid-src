@@ -1,8 +1,5 @@
 """Vérifie le mapping PUR flux Agent SDK → nœuds de trace (déterministe, sans I/O)."""
 
-from dataclasses import dataclass
-from typing import Any
-
 from claude_agent_sdk import (
     AssistantMessage,
     ResultMessage,
@@ -13,26 +10,6 @@ from claude_agent_sdk import (
 )
 
 from intreepid.scribe.trace import TraceBuilder
-
-
-@dataclass
-class _Observation:
-    """Test helper: observation object for verdict testing."""
-
-    claim: str
-    statut: str
-    note: Any = None
-    confiance: Any = None
-    nature: Any = None
-
-
-def _obs(
-    claim: str, statut: str, note: Any = None, confiance: Any = None, nature: Any = None
-) -> _Observation:
-    """Create a test observation object."""
-    return _Observation(
-        claim=claim, statut=statut, note=note, confiance=confiance, nature=nature
-    )
 
 
 def test_root_is_first_node():
@@ -82,18 +59,17 @@ def test_tool_result_parented_to_its_call():
     assert r.content["is_error"] is None
 
 
-def test_verdict_makes_observation_nodes():
+def test_custom_makes_arbitrary_nodes():
     b = TraceBuilder("s1", "q", "opus")
-    nodes = b.verdict(
+    nodes = b.custom(
         [
-            _obs("BE point noir", "fait", "z=+34", "haute"),
-            _obs("baisse⇒sûr", "refusé", "causalité"),
+            ("note", {"text": "libre"}, {"tag": "x"}),
+            ("marker", {}, {}),
         ]
     )
-    assert [n.kind for n in nodes] == ["observation", "observation"]
-    assert nodes[0].content == {"claim": "BE point noir", "note": "z=+34"}
-    assert nodes[0].meta == {"statut": "fait", "confiance": "haute", "nature": None}
-    assert nodes[1].meta["statut"] == "refusé"  # branche morte documentée
+    assert [n.kind for n in nodes] == ["note", "marker"]
+    assert nodes[0].content == {"text": "libre"}
+    assert nodes[0].meta == {"tag": "x"}
     assert all(n.parent_id == b.root.id for n in nodes)
 
 
@@ -124,6 +100,6 @@ def test_seq_is_monotonic_and_ids_deterministic():
             content=[ToolUseBlock(id="t1", name="n", input={})], model="opus"
         )
     )
-    ids = [n.id for n in b.verdict([_obs("c", "fait")])]
+    ids = [n.id for n in b.custom([("note", {"x": 1}, {})])]
     assert b.root.id == "s1#0"
-    assert ids == ["s1#2"]  # root=0, tool_call=1, observation=2
+    assert ids == ["s1#2"]  # root=0, tool_call=1, custom=2

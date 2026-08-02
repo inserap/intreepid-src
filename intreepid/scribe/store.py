@@ -103,9 +103,12 @@ class Scribe:
         """Capte un message du flux (peut être appelé pour tout type de message)."""
         self._insert(self._builder.add(message))
 
-    def record_verdict(self, observations: list[Any]) -> None:
-        """Capte le verdict parsé de l'analyste (un nœud observation par item)."""
-        self._insert(self._builder.verdict(observations))
+    def record_nodes(self, specs: list[tuple[str, Any, Any]]) -> None:
+        """Capte des nœuds projetés par le rôle (specs ``(kind, content, meta)``).
+
+        Primitive générique : le socle n'interprète pas le vocabulaire de ``kind``.
+        """
+        self._insert(self._builder.custom(specs))
 
     def __exit__(self, exc_type: Any, exc: Any, tb: Any) -> bool:
         try:
@@ -130,7 +133,7 @@ class Scribe:
             if self._con is not None:
                 self._con.close()
                 self._con = None
-        return False  # ne jamais supprimer l'exception de l'analyste
+        return False  # ne jamais supprimer l'exception de l'agent
 
 
 def load(db_path: str | Path, session_id: str) -> SessionTrace:

@@ -1,6 +1,6 @@
 """Modèle de trace de session (arbre immuable) et mapping du flux Agent SDK.
 
-Contrat de données du greffier : convertit le flux de messages de l'analyste en
+Contrat de données du greffier : convertit le flux de messages de l'agent en
 nœuds typés. Logique PURE (aucun I/O, aucun appel LLM) donc testable avec des
 messages factices. La persistance vit dans ``store.py``.
 """
@@ -85,9 +85,9 @@ class TraceBuilder:
         """
         out: list[TraceNode] = []
         if isinstance(message, AssistantMessage):
-            # ThinkingBlock/ToolUseBlock capturés ; TextBlock = verdict
-            # (via record_verdict) ; ServerToolUseBlock/ServerToolResultBlock hors
-            # périmètre (pas d'outils serveur ici).
+            # ThinkingBlock/ToolUseBlock = ACTES de l'agent ; TextBlock = RÉSULTAT,
+            # projeté en nœuds par le profil (Profile.on_result) ;
+            # ServerToolUseBlock/ServerToolResultBlock hors périmètre.
             for block in message.content:
                 if isinstance(block, ThinkingBlock):
                     out.append(
@@ -123,19 +123,16 @@ class TraceBuilder:
             }
         return out
 
-    def verdict(self, observations: list[Any]) -> list[TraceNode]:
-        """Crée un nœud ``observation`` par item du verdict.
+    def custom(
+        self, specs: list[tuple[str, dict[str, Any], dict[str, Any]]]
+    ) -> list[TraceNode]:
+        """Crée un nœud par spec ``(kind, content, meta)``, enfant de la racine.
 
-        refusé/hypothèse = branche morte documentée.
+        Primitive générique : le vocabulaire de ``kind`` et le schéma de
+        ``content``/``meta`` sont décidés par le rôle appelant (profil), pas par
+        le socle. Cf. ADR-0009 (le socle greffier est agnostique du rôle).
         """
-        out: list[TraceNode] = []
-        for o in observations:
-            out.append(
-                self._node(
-                    "observation",
-                    {"claim": o.claim, "note": o.note},
-                    self.root.id,
-                    {"statut": o.statut, "confiance": o.confiance, "nature": o.nature},
-                )
-            )
-        return out
+        return [
+            self._node(kind, content, self.root.id, meta)
+            for (kind, content, meta) in specs
+        ]

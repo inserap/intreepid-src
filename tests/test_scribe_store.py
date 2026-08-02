@@ -9,7 +9,6 @@ from claude_agent_sdk import (
     UserMessage,
 )
 
-from intreepid.agent.verdict import Observation
 from intreepid.scribe.store import Scribe, load
 
 
@@ -27,8 +26,14 @@ def _session(db, sid="s1"):
         sc.record(
             UserMessage(content=[ToolResultBlock(tool_use_id="t1", content="agrégat")])
         )
-        sc.record_verdict(
-            [Observation(claim="c", statut="fait", note="n", confiance="haute")]
+        sc.record_nodes(
+            [
+                (
+                    "observation",
+                    {"claim": "c", "note": "n"},
+                    {"statut": "fait", "confiance": "haute", "nature": None},
+                )
+            ]
         )
 
 

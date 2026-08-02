@@ -65,7 +65,16 @@ def build_options(
 
 def _record_verdict(scribe: Scribe | None, observations: list[Observation]) -> None:
     if scribe is not None:
-        scribe.record_verdict(observations)
+        scribe.record_nodes(
+            [
+                (
+                    "observation",
+                    {"claim": o.claim, "note": o.note},
+                    {"statut": o.statut, "confiance": o.confiance, "nature": o.nature},
+                )
+                for o in observations
+            ]
+        )
 
 
 def _parse(chunks: list[str]) -> list[Observation]:
