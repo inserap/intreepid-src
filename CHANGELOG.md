@@ -8,6 +8,24 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), et le v
 
 (rien pour l'instant)
 
+## [0.8.0] — 2026-08-02
+
+### Ajouté
+- **Socle d'exécution générique des agents (ADR-0009, Phase A / brique #7a)** : un orchestrateur unique paramétré par un **profil de rôle**, qui prépare l'accueil de rôles multiples (curateur, critique…) **sans dupliquer la mécanique d'exécution**.
+- `intreepid/agent/orchestrator.py` — `run_agent(profile, prompt, *, model, trace_to)` : boucle d'exécution one-shot commune à tous les rôles (garde OAuth Q-0010, capture greffier **best-effort**, parsing délégué au profil).
+- `intreepid/agent/profile.py` — `Profile` (dataclass frozen) : décrit **ce qui change d'un rôle à l'autre** (options SDK, parsing de sortie, hook de capture `on_result`).
+- `intreepid/agent/analyst_profile.py` — l'analyste exprimé comme `Profile` (charte, allowlist MCP, isolation P2/P3, projection du verdict).
+- **`scribe` agnostique du rôle** : primitive générique `Scribe.record_nodes(specs)` / `TraceBuilder.custom(specs)` remplace `record_verdict`/`verdict` — le socle greffier ne connaît plus le schéma « observation » de l'analyste ; la **projection résultat→nœuds descend dans le profil**.
+- Tests : `tests/test_orchestrator.py`, `tests/test_analyst_profile.py` (+ adaptations `test_scribe_*`). **89 déterministes verts**.
+
+### Modifié
+- `intreepid/agent/runner.py` réduit à un **wrapper mince** : `run_analysis` conserve sa signature publique (non-régression) et délègue à `run_agent(analyst_profile())`.
+
+### Notes
+- MINOR : refactor à **iso-comportement** (mêmes nœuds/ids/statuts de trace, isolation P2/P3 identique) qui **ajoute** une API publique (`run_agent`, `Profile`, `record_nodes`). Aucune rupture. Démo greffier : arbre capturé/rejoué **identique** via `run_agent`.
+- Prépare les phases **B** (trace à cycle ouvert), **C** (MCP multi-dataset), **D** (profil curateur) de la brique #7.
+- Différés (follow-ups) : **rendu agnostique** des renderers (`render.py`/`notebook.py` dispatchent encore sur le kind `observation`) ; `Protocol` pour `record_nodes` (retirer un `type: ignore`) ; dérive d'isolation P3 des méta-outils CLI (Q-0019).
+
 ## [0.7.0] — 2026-08-02
 
 ### Ajouté
