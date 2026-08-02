@@ -13,7 +13,7 @@ from claude_agent_sdk import (
     UserMessage,
 )
 
-from intreepid.agent import runner
+from intreepid.agent import orchestrator, runner
 from intreepid.scribe.store import load
 
 
@@ -35,7 +35,7 @@ async def _fake_query(*, prompt, options):
 @pytest.fixture(autouse=True)
 def _no_api_key(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.setattr(runner, "query", _fake_query)
+    monkeypatch.setattr(orchestrator, "query", _fake_query)
 
 
 async def test_build_options_thinking_toggle():
@@ -55,7 +55,7 @@ async def test_no_capture_when_trace_to_none(tmp_path):
             content=[TextBlock(text='[{"claim": "c", "statut": "fait"}]')], model="test"
         )
 
-    runner.query = _fake_query_capture  # type: ignore[assignment]
+    orchestrator.query = _fake_query_capture  # type: ignore[assignment]
     obs = await runner.run_analysis("q?", model=None, trace_to=None)
     assert [o.statut for o in obs] == ["fait"]
     assert not list(tmp_path.iterdir())  # aucun store écrit
@@ -83,7 +83,7 @@ async def test_capture_writes_tree(tmp_path):
             content=[TextBlock(text='[{"claim": "c", "statut": "fait"}]')], model="test"
         )
 
-    runner.query = _fake_query_capture  # type: ignore[assignment]
+    orchestrator.query = _fake_query_capture  # type: ignore[assignment]
     db = tmp_path / "ep.duckdb"
     obs = await runner.run_analysis("q?", model=None, trace_to=db)
     assert [o.claim for o in obs] == ["c"]  # verdict inchangé (non-régression)
@@ -155,7 +155,7 @@ async def test_analyst_exception_seals_aborted(tmp_path, monkeypatch):
         )
         raise RuntimeError("boom analyste")
 
-    monkeypatch.setattr(runner, "query", _failing_query)
+    monkeypatch.setattr(orchestrator, "query", _failing_query)
 
     db = tmp_path / "ep.duckdb"
     with pytest.raises(RuntimeError, match="boom analyste"):

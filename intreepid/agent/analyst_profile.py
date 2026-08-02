@@ -1,0 +1,102 @@
+"""Profil de l'agent analyste : options isolées (P2/P3) + parsing du verdict.
+
+Exprime l'analyste (charte, allowlist MCP, isolation des built-ins, verdict
+fait/hypothèse/refusé) comme un Profile pour l'orchestrateur générique
+(ADR-0009). La mécanique d'exécution vit dans orchestrator.py.
+"""
+
+from pathlib import Path
+
+from claude_agent_sdk import ClaudeAgentOptions
+
+from intreepid.agent.profile import Profile
+from intreepid.agent.verdict import Observation, parse_verdict
+from intreepid.scribe.store import Scribe
+
+CHARTER = (Path(__file__).parent / "charter.md").read_text(encoding="utf-8")
+
+_MCP_TOOLS = [
+    "mcp__intreepid__list_datasets",
+    "mcp__intreepid__describe",
+    "mcp__intreepid__profile_stats",
+    "mcp__intreepid__concentration_test",
+    "mcp__intreepid__spatial_scale_robustness",
+]
+
+_DISALLOWED = [
+    "Bash",
+    "Read",
+    "Write",
+    "Edit",
+    "MultiEdit",
+    "Glob",
+    "Grep",
+    "LS",
+    "WebSearch",
+    "WebFetch",
+    "NotebookRead",
+    "NotebookEdit",
+    "Skill",
+]
+
+
+def build_options(
+    model: str | None = None, *, thinking: bool = False
+) -> ClaudeAgentOptions:
+    """Construit les options de l'analyste avec isolation maximale (invariant P2/P3).
+
+    Config VÉRIFIÉE EMPIRIQUEMENT par smoke (pas par lecture de source) :
+    - disallowed_tools (`_DISALLOWED`) = barrière PRINCIPALE : retire les built-ins
+      fichier/shell/web + Skill du contexte (smoke : Bash/Read bloqués, MCP OK).
+    - allowed_tools (`_MCP_TOOLS`) : auto-approuve UNIQUEMENT les outils MCP intreepid.
+    - strict_mcp_config / setting_sources=[] / skills=[] : ignore serveurs MCP,
+      settings et skills ambiants.
+    NB : `tools=[]` a été essayé puis RETIRÉ — il vide AUSSI les outils MCP (smoke :
+    l'agent se retrouve sans aucun outil et ne peut plus profiler). C'est
+    `disallowed_tools` qui porte l'isolation des built-ins, pas `tools`.
+    """
+    return ClaudeAgentOptions(
+        model=model,
+        allowed_tools=_MCP_TOOLS,
+        disallowed_tools=_DISALLOWED,
+        system_prompt=CHARTER,
+        mcp_servers={
+            "intreepid": {
+                "type": "stdio",
+                "command": "uv",
+                "args": ["run", "python", "-m", "intreepid.mcp_server.server"],
+            }
+        },
+        permission_mode="bypassPermissions",
+        strict_mcp_config=True,
+        setting_sources=[],
+        skills=[],
+        thinking={"type": "adaptive", "display": "summarized"} if thinking else None,
+    )
+
+
+def _record_verdict(scribe: Scribe | None, observations: list[Observation]) -> None:
+    if scribe is not None:
+        scribe.record_nodes(
+            [
+                (
+                    "observation",
+                    {"claim": o.claim, "note": o.note},
+                    {"statut": o.statut, "confiance": o.confiance, "nature": o.nature},
+                )
+                for o in observations
+            ]
+        )
+
+
+def _parse(chunks: list[str]) -> list[Observation]:
+    return parse_verdict("\n".join(chunks))
+
+
+def analyst_profile() -> Profile:
+    return Profile(
+        role="analyst",
+        build_options=build_options,
+        parse=_parse,
+        on_result=_record_verdict,
+    )
