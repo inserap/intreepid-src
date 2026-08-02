@@ -28,6 +28,7 @@ runbook**.
 | Brique #4 — le greffier | [`brique-4-greffier.md`](brique-4-greffier.md) | capture épisodique (trace complète, arbre immuable DuckDB), rejeu, robustesse (interruption + filet) | à jour (`v0.5.0`) |
 | Brique #5 — le produit de session | [`brique-5-notebook.md`](brique-5-notebook.md) | analyste sur donnée **réelle** (267K OFROU), notebook Quarto rejouable depuis la trace, volume ≠ excès sur du réel (BE/ZH), refus causal, honnêteté validée sur donnée propre | à jour (`v0.6.0`) |
 | Brique #6 — robustesse d'échelle spatiale | [`brique-6-robustesse-echelle.md`](brique-6-robustesse-echelle.md) | test H3 multi-résolution (6/7/8), verdict **robuste** sur 267K points OFROU + STATPOP, part unpopulated (corridors transit), caveats planaire/réseau, agnostique au domaine | à venir (`v0.7.0`) |
+| Brique #7b — le profil brut | [`brique-7b-profil-brut.md`](brique-7b-profil-brut.md) | profiler un dataset **sans fiche** (ingestion) via MCP, inférence de type candidat (Q-0015a), code déguisé par faible cardinalité, garde anti-traversée, sans LLM | à venir (`v0.9.0`) |
 
 ## Ajouter une démo
 
