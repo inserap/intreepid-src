@@ -8,6 +8,19 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), et le v
 
 (rien pour l'instant)
 
+## [0.9.0] — 2026-08-02
+
+### Ajouté
+- **Profil brut d'un dataset SANS fiche (couche M, ADR-0009 / brique #7b)** : profiler un dataset **non encore fiché** (ingestion) via MCP, avec un **type candidat** inféré par colonne (Q-0015a). Amorce la curation ; le curateur (brique #7c) affinera les candidats avec l'humain.
+- `intreepid/mcp_server/profiling_raw.py` (**agnostique au domaine**) : `infer_type(con, table, col)` — heuristique SQL type → `categorical`/`numeric`/`temporal`/`spatial`, un numérique de **faible cardinalité** (≤ 25) = **code déguisé** (cf. sentinelle `999`) ; `profile_raw(con, table)` **réutilise** les profileurs de `profile_stats.py` (DRY, un seul `DESCRIBE`) et marque chaque profil `type_inferred: True`.
+- **Outil MCP `profile_raw(dataset_path)`** : ouverture du parquet **par-appel** (`open_readonly`, CM court, read-only P3), **garde anti-traversée** (chemin résolu = `*.parquet` existant sous `DATA_DIR`), nom de table sanitisé, sortie enveloppée **`untrusted_data`** (Q-0008). Additif : bootstrap mono-fiche et 5 outils fichés **intacts**.
+- Runbook `demo/brique-7b-profil-brut.md` (sortie réelle : 267 761 lignes OFROU **brutes**, 36 colonnes, types candidats — `AccidentUID` card 267 761 = signal « identifiant, pas catégorie » pour le curateur). Tests : `test_profiling_raw.py` (golden inférence + fixture réelle) + 2 tests serveur (outil MCP + rejet de traversée). **94 déterministes verts**, non-régression tenue.
+
+### Notes
+- MINOR : outil additif, aucune rupture d'API. Le type inféré est un **candidat** (jamais une vérité) — le curateur/humain le valide (frontière charte↔fiche, Q-0004/Q-0015).
+- Découpage walking-skeleton (décision 2026-08-02) : #7b = couche **M seule** (seul livrable démontrable en propre) ; la couche B (trace cycle-ouvert) rejoint le curateur D en **#7c**, construite avec son consommateur. Plan validé SHIP par 2 passes advisor.
+- Différés (SHOULDs advisor, non-bloquants) : docstring `infer_type` (appel répété O(n×DESCRIBE)) ; collision théorique de noms de table par sanitisation ; harmonisation d'imports de test.
+
 ## [0.8.0] — 2026-08-02
 
 ### Ajouté
