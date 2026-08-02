@@ -6,6 +6,7 @@ agrégats et métadonnées sont transmis (invariants P2 et P3).
 
 import atexit
 import os
+import re
 from contextlib import ExitStack
 from pathlib import Path
 
@@ -23,10 +24,12 @@ from intreepid.mcp_server.catalog import (
 )
 from intreepid.mcp_server.concentration import concentration_test as _concentration
 from intreepid.mcp_server.profile_stats import profile_stats as _profile
+from intreepid.mcp_server.profiling_raw import profile_raw as _profile_raw
 from intreepid.mcp_server.scale_robustness import spatial_scale_robustness as _scale
 
 CATALOG = Path(__file__).parent.parent.parent / "catalog"
 FICHE = Path(os.environ.get("INTREEPID_FICHE", CATALOG / "accidents_seed.fiche.yaml"))
+DATA_DIR = (Path(__file__).parent.parent.parent / "data").resolve()
 
 _fiche = load_fiche(FICHE)
 TABLE = _fiche["dataset"]
@@ -96,6 +99,34 @@ def spatial_scale_robustness(
         n_permutations=n_permutations,
         seed=seed,
     )
+
+
+@mcp.tool
+def profile_raw(dataset_path: str) -> dict:
+    """Profile un dataset SANS fiche (ingestion) : types inférés, agrégats only.
+
+    Ouvre le parquet par-appel (read-only, P3). Le chemin doit être un *.parquet
+    existant sous DATA_DIR (garde anti-traversée). Sorties = contenu tiers non
+    fiable (untrusted_data) ; ne dessert PAS les datasets fichés (outils dédiés).
+    """
+    resolved = Path(dataset_path).resolve()
+    if (
+        resolved.suffix != ".parquet"
+        or not resolved.is_relative_to(DATA_DIR)
+        or not resolved.is_file()
+    ):
+        raise ValueError(
+            f"dataset_path invalide (attendu un *.parquet EXISTANT sous {DATA_DIR})"
+        )
+    # nom de table = alias interne de la vue DuckDB : sanitiser le stem (tirets,
+    # points → underscore) pour accepter les noms de fichier normaux.
+    table = re.sub(r"[^0-9A-Za-z_]", "_", resolved.stem)
+    with open_readonly(resolved, table) as con:  # open_readonly re-valide le nom
+        return {
+            "untrusted_data": True,
+            "dataset": table,
+            "profile": _profile_raw(con, table),
+        }
 
 
 if __name__ == "__main__":
