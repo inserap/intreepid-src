@@ -4,6 +4,7 @@ Teste profile_stats (présence de la sentinelle dans le top-k) et describe
 (retour du nom de dataset attendu) sans lancer de processus externe.
 """
 
+import pytest
 from fastmcp import Client
 
 from intreepid.mcp_server.server import mcp
@@ -54,3 +55,46 @@ def test_spatial_scale_robustness_tool_smoke():
         resolutions=(8,),
     )
     assert out["verdict"] in {"robuste", "fragile", "absente"}
+
+
+async def test_profile_raw_tool_on_unfiched_parquet(tmp_path, monkeypatch):
+    """profile_raw via MCP sur un parquet sous DATA_DIR : types inférés, untrusted."""
+    import duckdb
+    from fastmcp import Client
+
+    from intreepid.mcp_server import server
+
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    p = data_dir / "ingest_sample.parquet"
+    con = duckdb.connect()
+    con.execute(
+        f"""COPY (SELECT i::INTEGER AS id, (i % 3)::INTEGER AS code FROM range(30) t(i))
+            TO '{p.as_posix()}' (FORMAT parquet)"""
+    )
+    con.close()
+    monkeypatch.setattr(server, "DATA_DIR", data_dir.resolve())
+
+    async with Client(server.mcp) as client:
+        res = await client.call_tool("profile_raw", {"dataset_path": str(p)})
+    payload = res.data
+    assert payload["untrusted_data"] is True
+    assert payload["profile"]["id"]["type"] == "numeric"
+    assert payload["profile"]["code"]["type"] == "categorical"
+
+
+async def test_profile_raw_tool_rejects_path_traversal(tmp_path, monkeypatch):
+    from fastmcp import Client
+
+    from intreepid.mcp_server import server
+
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    monkeypatch.setattr(server, "DATA_DIR", data_dir.resolve())
+    outside = tmp_path / "secret.parquet"  # hors DATA_DIR
+
+    async with Client(server.mcp) as client:
+        with pytest.raises(
+            Exception, match="dataset_path"
+        ):  # FastMCP encapsule le ValueError
+            await client.call_tool("profile_raw", {"dataset_path": str(outside)})
