@@ -43,6 +43,18 @@ _DISALLOWED = [
 def build_options(
     model: str | None = None, *, thinking: bool = False
 ) -> ClaudeAgentOptions:
+    """Construit les options de l'analyste avec isolation maximale (invariant P2/P3).
+
+    Config VÉRIFIÉE EMPIRIQUEMENT par smoke (pas par lecture de source) :
+    - disallowed_tools (`_DISALLOWED`) = barrière PRINCIPALE : retire les built-ins
+      fichier/shell/web + Skill du contexte (smoke : Bash/Read bloqués, MCP OK).
+    - allowed_tools (`_MCP_TOOLS`) : auto-approuve UNIQUEMENT les outils MCP intreepid.
+    - strict_mcp_config / setting_sources=[] / skills=[] : ignore serveurs MCP,
+      settings et skills ambiants.
+    NB : `tools=[]` a été essayé puis RETIRÉ — il vide AUSSI les outils MCP (smoke :
+    l'agent se retrouve sans aucun outil et ne peut plus profiler). C'est
+    `disallowed_tools` qui porte l'isolation des built-ins, pas `tools`.
+    """
     return ClaudeAgentOptions(
         model=model,
         allowed_tools=_MCP_TOOLS,
