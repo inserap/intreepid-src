@@ -17,7 +17,7 @@ from intreepid.agent.curator.turn import CuratorTurn, parse_curator_turn
 from intreepid.agent.profile import Profile
 from intreepid.scribe.store import Scribe
 
-CHARTER = (Path(__file__).parent / "curator_charter.md").read_text(encoding="utf-8")
+CHARTER = (Path(__file__).parent / "charter.md").read_text(encoding="utf-8")
 
 _MCP_TOOLS = ["mcp__intreepid__profile_raw"]
 

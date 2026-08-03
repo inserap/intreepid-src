@@ -1,13 +1,13 @@
 """Vérifie le profil curateur : isolation P2/P3, terminaison, validation."""
 
-from intreepid.agent.curator.surface import Surface
-from intreepid.agent.curator.turn import CuratorTurn
-from intreepid.agent.curator_profile import (
+from intreepid.agent.curator.profile import (
     _DISALLOWED,
     _MCP_TOOLS,
     build_options,
     curator_profile,
 )
+from intreepid.agent.curator.surface import Surface
+from intreepid.agent.curator.turn import CuratorTurn
 
 
 def test_allowlist_is_profile_raw_only():
