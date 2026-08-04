@@ -16,7 +16,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-_BLOCK = re.compile(r"```[A-Za-z]*[ \t]*\n(.*?)```", re.DOTALL)
+_BLOCK = re.compile(r"```[A-Za-z]*[ \t\r]*\n(.*?)```", re.DOTALL)
 
 
 @dataclass(frozen=True)
@@ -53,8 +53,9 @@ def parse_curator_turn(text: str) -> CuratorTurn:
     message = f"{avant}\n{apres}".strip()
     if not message:  # aucun texte hors bloc => repli sur l'ancien champ `message`
         message = str(payload.get("message", "")).strip()
+    draft = payload.get("fiche_draft")
     return CuratorTurn(
         message=message,
-        fiche_draft=payload.get("fiche_draft"),
+        fiche_draft=draft if isinstance(draft, dict) and draft else None,
         proposes_completion=bool(payload.get("proposes_completion", False)),
     )

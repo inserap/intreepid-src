@@ -104,6 +104,21 @@ def test_champs_absents_valeurs_par_defaut() -> None:
     assert turn.proposes_completion is False
 
 
+def test_fiche_draft_non_dict_ou_vide_vaut_none() -> None:
+    for brut in ("{}", '"voir ci-dessus"', "[]"):
+        payload = f'{{"fiche_draft": {brut}, "proposes_completion": true}}'
+        text = f"P.\n```json\n{payload}\n```\n"
+        assert parse_curator_turn(text).fiche_draft is None
+
+
+def test_crlf_line_endings_parsed() -> None:
+    text = (
+        'P.\r\n```json\r\n{"fiche_draft": null, "proposes_completion": true}\r\n```\r\n'
+    )
+    result = parse_curator_turn(text)
+    assert result.proposes_completion is True
+
+
 def test_fence_non_json_dans_la_prose_ne_casse_pas_le_parsing() -> None:
     # Le curateur écrit désormais du markdown libre : une fence illustrative
     # (```yaml, ```sql…) ne doit ni casser le parsing ni polluer le message.

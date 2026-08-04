@@ -64,9 +64,10 @@ uv run python -m intreepid.demo_curator data/raw/RoadTrafficAccidentLocations.pa
 - Noter si des **préambules d'outil** (« je vais d'abord profiler… ») apparaissent
   avant le verrou : la prose hors JSON les rend désormais visibles.
 - Noter si l'on a **contredit le penchant** du curateur au moins une fois. Le gold
-  montre 7 réponses « a » sur 8, et (a) y est systématiquement l'option privilégiée
-  par l'agent : sans ce relevé, on ne peut pas distinguer « le curateur a raison »
-  de « l'humain ratifie sans réfléchir » — le mode d'échec propre à la puce PENCHANT.
+  montre 6 réponses « a » sur 7 questions, et (a) y est systématiquement l'option
+  privilégiée par l'agent : sans ce relevé, on ne peut pas distinguer « le curateur
+  a raison » de « l'humain ratifie sans réfléchir » — le mode d'échec propre à la
+  puce PENCHANT.
 - Noter l'heure de fin (`date +%H:%M:%S`).
 
 ## Critères de succès
@@ -127,8 +128,9 @@ réaction au merge — leçon #7c.
 
 | Problème | Action |
 |---|---|
-| Boucle qui ne termine pas | Taper `valider` ou `ok` à l'invite de correction |
+| Boucle qui ne termine pas | Écrire à l'agent : "rends la fiche complète et propose la validation". Il n'existe aucun raccourci côté application ; `Ctrl+C` perd tout. |
 | Agent bloqué / timeout | `Ctrl+C` : session **abortée**, aucune fiche écrite, il faut relancer |
+| Le tour affiche un gros bloc JSON brut | Le bloc final est invalide (repli du parseur) : répondre "ton bloc JSON final est invalide, ré-émets-le seul et bien formé". |
 | Fichier parquet introuvable | `ls data/raw/RoadTrafficAccidentLocations.parquet` depuis `intreepid/src` |
 | `ANTHROPIC_API_KEY` définie par erreur | `unset ANTHROPIC_API_KEY` avant de relancer |
 | L'agent propose la validation sans fiche | Le curateur ne peut plus terminer là-dessus : lui demander la fiche complète à l'invite, ou `Ctrl+C` |
