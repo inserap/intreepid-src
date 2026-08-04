@@ -73,24 +73,41 @@ def test_custom_makes_arbitrary_nodes():
     assert all(n.parent_id == b.root.id for n in nodes)
 
 
-def test_result_message_fills_result_meta_no_node():
+def test_result_message_remplit_meta_et_cree_un_noeud():
     b = TraceBuilder("s1", "q", "opus")
     nodes = b.add(
         ResultMessage(
             subtype="success",
-            duration_ms=10,
-            duration_api_ms=8,
+            duration_ms=120_000,
+            duration_api_ms=90_000,
             is_error=False,
             num_turns=3,
-            session_id="x",
+            session_id="s1",
             total_cost_usd=0.02,
+            usage={"input_tokens": 1000, "output_tokens": 500},
             terminal_reason="completed",
         )
     )
-    assert nodes == []
+    # la méta de session garde son comportement (elle alimente le notebook)
     assert b.result_meta["num_turns"] == 3
-    assert b.result_meta["terminal_reason"] == "completed"
     assert b.result_meta["total_cost_usd"] == 0.02
+    assert b.result_meta["terminal_reason"] == "completed"
+    # et la fin de tour devient un nœud durable, mesurable tour par tour
+    assert len(nodes) == 1
+    node = nodes[0]
+    assert node.kind == "turn_result"
+    assert node.parent_id == b.root.id
+    assert node.content["duration_ms"] == 120_000
+    assert node.content["duration_api_ms"] == 90_000
+    assert node.content["total_cost_usd"] == 0.02
+    assert node.content["usage"]["output_tokens"] == 500
+    assert node.content["terminal_reason"] == "completed"
+    assert node.meta == {}  # le socle n'attribue rien (agnostique du rôle)
+
+
+def test_tracenode_ts_vaut_none_a_la_capture():
+    b = TraceBuilder("s1", "q", None)
+    assert b.root.ts is None  # le builder est pur : le store est l'autorité du temps
 
 
 def test_seq_is_monotonic_and_ids_deterministic():

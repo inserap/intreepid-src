@@ -8,6 +8,23 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), et le v
 
 (rien pour l'instant)
 
+## [0.11.0] — 2026-08-05
+
+### Ajouté
+- **Mesure du coût et du temps d'une session (brique #9)** : le temps et le coût financier deviennent mesurables **pour tout rôle** et **rétroactivement**, sans aucun organe de télémétrie. La mesure est une **lecture** de ce que le greffier capturait déjà sans jamais le relire.
+- **Nœud `turn_result`** (`scribe/trace.py`) : la fin de tour, jusqu'ici rangée dans une métadonnée de session **écrasée à chaque tour** (donc perdue en multi-tours sauf pour le dernier), devient un nœud **horodaté et durable dès la capture**, portant `duration_ms`, `duration_api_ms`, `num_turns`, `total_cost_usd`, `usage`, `terminal_reason`. Le socle reste **agnostique du rôle** (`meta` vide, aucun vocabulaire métier) ; la métadonnée de session conserve son comportement (elle alimente le notebook).
+- **`TraceNode.ts`** + relecture par `store.load` : l'horodatage était **écrit** en base mais jamais **relu**, ce qui rendait la durée d'un appel d'outil incalculable. `TraceBuilder` reste **pur et déterministe** — il ne le remplit jamais, le store est l'unique autorité du temps.
+- **`scribe/metrics.py`** (module **pur**) : `summarize` projette une trace en mesures — par tour (durée, durée API, temps hors API, coût, tokens), par appel d'outil (durée par **appariement des horodatages** `tool_call`/`tool_result`), et en totaux ; `render_metrics` en donne un rendu texte. Ne dispatche que sur les kinds du socle.
+- **`metrics_report`** : `uv run python -m intreepid.metrics_report <trace.duckdb> [session_id]` relit **n'importe quelle trace déjà écrite** — c'est ce qui rend l'instrumentation rétroactive. Une trace antérieure à cette version se replie sur la métadonnée de session et **se déclare dégradée**.
+- `demo_curator.py` : trace **persistante** (`traces/`, gitignorée) au lieu d'un dossier temporaire détruit à la sortie ; mesures affichées en fin de séance ; chemin de relecture imprimé **même en cas d'interruption**.
+
+### Notes
+- MINOR : additif. `intreepid/agent/**` intouché ; analyste et orchestrateur non régressés. **129 tests verts.**
+- **Honnêteté de la mesure** : une valeur inconnue s'affiche `?`, jamais `0` — une session interrompue avant le premier retour du SDK a un coût **inconnu**, pas nul. Un total partiel s'annonce comme minorant (`≥`).
+- **Piège nommé** : `duration_ms − duration_api_ms` (`non_api_ms`) **n'est pas** le coût des outils — l'orchestrateur relance une requête neuve à chaque tour, donc le démarrage du CLI et l'amorçage du serveur MCP y tombent. Le rendu décompose « outils mesurés » et « démarrage processus/amorçage ».
+- Déclencheur : arbitrer sur des chiffres la décision « n'émettre le brouillon de fiche qu'au dernier tour » (brique #8), prise contre une latence de ~2 min/tour.
+- Connu, différé : le commentaire DST de `metrics.py` est inexact (DuckDB stocke en heure locale naïve) ; `PYTHONIOENCODING=utf-8` pour un rendu propre en console Windows.
+
 ## [0.10.0] — 2026-08-04
 
 ### Ajouté
