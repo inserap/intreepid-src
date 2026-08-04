@@ -30,6 +30,7 @@ runbook**.
 | Brique #6 — robustesse d'échelle spatiale | [`brique-6-robustesse-echelle.md`](brique-6-robustesse-echelle.md) | test H3 multi-résolution (6/7/8), verdict **robuste** sur 267K points OFROU + STATPOP, part unpopulated (corridors transit), caveats planaire/réseau, agnostique au domaine | à venir (`v0.7.0`) |
 | Brique #7b — le profil brut | [`brique-7b-profil-brut.md`](brique-7b-profil-brut.md) | profiler un dataset **sans fiche** (ingestion) via MCP, inférence de type candidat (Q-0015a), code déguisé par faible cardinalité, garde anti-traversée, sans LLM | à venir (`v0.9.0`) |
 | Brique #7c — le curateur conversationnel | [`brique-7c-curateur.md`](brique-7c-curateur.md) | curation maïeutique d'un dataset non-fiché (OFROU 267K lignes, 36 colonnes), dialogue colonne par colonne, types corrigés par l'humain, fiche YAML validée, nœud `curation_validated` dans le greffier | à venir (`v0.10.0`) |
+| Brique #8 — le curateur naturel | [`brique-8-curateur-naturel.md`](brique-8-curateur-naturel.md) | qualité conversationnelle par défaut : forme de tour prescrite (verrou / ancrage chiffré / enjeu / options / « je ne sais pas »), prose hors du bloc JSON, fiche émise au seul tour final | à venir (`v0.11.0`) |
 
 ## Ajouter une démo
 
