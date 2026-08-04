@@ -124,6 +124,47 @@ def test_pure_total_on_unknown_kind():
     assert "non rendu" in out
 
 
+def test_turn_result_noeud_non_rendu_dans_notebook():
+    # Garde de non-régression : un nœud turn_result ne doit rien émettre dans le
+    # notebook. Sans cette garde, une régression future réinjecterait un commentaire
+    # parasite par tour (ex. "<!-- nœud non rendu : kind=turn_result -->").
+    sid = "s3"
+    tr = SessionTrace(
+        sid,
+        "Q",
+        "opus",
+        "closed",
+        [
+            TraceNode(
+                f"{sid}#0",
+                sid,
+                0,
+                None,
+                "session_root",
+                {"question": "Q", "model": "opus"},
+            ),
+            TraceNode(
+                f"{sid}#1",
+                sid,
+                1,
+                f"{sid}#0",
+                "turn_result",
+                {
+                    "duration_ms": 5000,
+                    "duration_api_ms": 3000,
+                    "num_turns": 1,
+                    "total_cost_usd": 0.01,
+                    "usage": {"input_tokens": 100, "output_tokens": 50},
+                    "terminal_reason": "end_turn",
+                },
+            ),
+        ],
+        {},
+    )
+    out = to_quarto(tr)
+    assert "turn_result" not in out
+
+
 def test_render_html_degrades_without_quarto(monkeypatch, tmp_path):
     import intreepid.scribe.notebook as nb
 

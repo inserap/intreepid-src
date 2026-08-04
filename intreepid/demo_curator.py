@@ -38,7 +38,13 @@ def main() -> None:
     traces = Path(__file__).parent.parent / "traces"
     traces.mkdir(parents=True, exist_ok=True)
     db = traces / f"curator-{uuid.uuid4().hex[:8]}.duckdb"
-    anyio.run(lambda: run_agent(profile, prompt, model="opus", trace_to=db))
+    try:
+        anyio.run(lambda: run_agent(profile, prompt, model="opus", trace_to=db))
+    finally:
+        # Quoi qu'il arrive (interruption clavier, exception), le chemin et la ligne
+        # de relecture sont imprimés : c'est la session dont on veut le coût.
+        print(f"\ntrace conservée : {db}")
+        print(f"  relecture : uv run python -m intreepid.metrics_report {db}")
     if not db.is_file():
         # l'orchestrateur poursuit sans greffier si l'ouverture échoue : la base
         # peut donc manquer alors que la conversation, elle, a bien eu lieu.
@@ -62,8 +68,6 @@ def main() -> None:
             print(f"  hash    : {str(validated[0].meta.get('hash', ''))[:16]}…")
         print("\n--- mesures ---")
         print(render_metrics(summarize(tr)))
-    print(f"\ntrace conservée : {db}")
-    print(f"  relecture : uv run python -m intreepid.metrics_report {db}")
 
 
 if __name__ == "__main__":

@@ -52,14 +52,14 @@ def _tour(seq, offset_s, cost=0.01, dur=100_000, api=60_000):
     )
 
 
-def test_mesure_par_tour_et_temps_hors_llm() -> None:
+def test_mesure_par_tour_et_temps_hors_api() -> None:
     m = summarize(_trace([_tour(1, 0.0), _tour(2, 200.0, cost=0.02)]))
     assert len(m.turns) == 2
-    assert m.turns[0].tool_ms == 40_000  # duration_ms - duration_api_ms
+    assert m.turns[0].non_api_ms == 40_000  # duration_ms - duration_api_ms
     assert m.turns[0].output_tokens == 5
     assert m.total_cost_usd == 0.03
     assert m.total_api_ms == 120_000
-    assert m.total_tool_ms == 80_000
+    assert m.total_non_api_ms == 80_000
 
 
 def test_duree_d_un_appel_d_outil_par_appariement() -> None:
@@ -119,7 +119,9 @@ def test_trace_vide_ne_leve_pas() -> None:
     assert m.turns == []
     assert m.tools == []
     assert m.wall_ms is None
-    assert m.total_cost_usd == 0.0
+    assert m.total_cost_usd is None
+    assert m.total_api_ms is None
+    assert m.total_non_api_ms is None
     assert m.degraded is False
 
 
@@ -147,6 +149,37 @@ def test_rendu_texte_porte_les_totaux() -> None:
     assert "profile_raw" not in texte  # aucun outil dans cette trace
     assert "tour" in texte.lower()
     assert "0.01" in texte
+
+
+def test_trace_sans_tour_avec_outils_affiche_inconnu() -> None:
+    # Défaut bloquant : sans tour et sans méta de coût, les totaux doivent
+    # s'afficher "?" (None), pas 0. La trace contient des appels d'outil réels.
+    nodes = [
+        _node(
+            1,
+            "tool_call",
+            {"name": "profile_raw", "input": {}},
+            {"tool_use_id": "t1"},
+            0.0,
+        ),
+        _node(
+            2,
+            "tool_result",
+            {"content": "ok", "is_error": False},
+            {"tool_use_id": "t1"},
+            5.0,
+        ),
+    ]
+    m = summarize(_trace(nodes))
+    assert m.degraded is False
+    assert m.turns == []
+    assert m.total_cost_usd is None
+    assert m.total_api_ms is None
+    assert m.total_non_api_ms is None
+    texte = render_metrics(m)
+    # Le total doit s'afficher "?" et non "0.0000 USD"
+    assert "0.0000 USD" not in texte
+    assert "?" in texte
 
 
 def test_bout_en_bout_capture_relecture_mesure(tmp_path) -> None:
@@ -180,7 +213,7 @@ def test_bout_en_bout_capture_relecture_mesure(tmp_path) -> None:
     m = summarize(load(db, "s1"))
     assert m.degraded is False
     assert len(m.turns) == 1
-    assert m.turns[0].tool_ms == 3000
+    assert m.turns[0].non_api_ms == 3000
     assert m.turns[0].output_tokens == 400
     assert m.total_cost_usd == 0.031
     assert [t.name for t in m.tools] == ["profile_raw"]

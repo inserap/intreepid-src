@@ -12,6 +12,13 @@ Deux limites à connaître. (1) Les ``ts`` d'une trace relue sont des datetime N
 les écarts internes à une trace restent justes (piège DST sur une session à cheval
 sur un changement d'heure). (2) Plusieurs ``ToolUseBlock`` d'un même message
 partagent l'instant d'observation : leurs durées valent alors celle du lot.
+
+Interprétation du temps hors API (``non_api_ms``) : c'est la soustraction
+``duration_ms − duration_api_ms``. L'orchestrateur relance un processus CLI et
+amorce un serveur MCP en sous-processus à CHAQUE tour : ce démarrage de processus
+et cet amorçage tombent entièrement dans ce chiffre. Il N'EST PAS assimilable au
+coût des outils — ``total_tool_measured_ms`` mesure ceux-ci séparément via
+l'appariement des horodatages call/result.
 """
 
 from dataclasses import dataclass
@@ -27,7 +34,7 @@ class TurnMetrics:
     index: int
     duration_ms: int | None
     duration_api_ms: int | None
-    tool_ms: int | None
+    non_api_ms: int | None
     cost_usd: float | None
     input_tokens: int | None
     output_tokens: int | None
@@ -51,11 +58,13 @@ class SessionMetrics:
     turns: list[TurnMetrics]
     tools: list[ToolMetrics]
     wall_ms: float | None
-    total_cost_usd: float
-    total_api_ms: int
-    total_tool_ms: int
+    total_cost_usd: float | None
+    total_api_ms: int | None
+    total_non_api_ms: int | None
+    total_tool_measured_ms: float | None
     calls_by_tool: dict[str, int]
     degraded: bool = False
+    totals_partial: bool = False
 
 
 def _int_or_none(value: Any) -> int | None:
@@ -71,11 +80,20 @@ def _turn(index: int, node: TraceNode) -> TurnMetrics:
         index=index,
         duration_ms=duree,
         duration_api_ms=api,
-        tool_ms=(duree - api) if (duree is not None and api is not None) else None,
+        non_api_ms=(duree - api) if (duree is not None and api is not None) else None,
         cost_usd=cout if isinstance(cout, (int, float)) else None,
         input_tokens=_int_or_none(usage.get("input_tokens")),
         output_tokens=_int_or_none(usage.get("output_tokens")),
     )
+
+
+def _sum_optional(values: list[float | int | None]) -> tuple[float | None, bool]:
+    """Somme les valeurs connues ; renvoie (None, False) si aucune, (somme, partiel)."""
+    known = [v for v in values if v is not None]
+    if not known:
+        return None, False
+    partial = len(known) < len(values)
+    return sum(known), partial
 
 
 def summarize(trace: SessionTrace) -> SessionMetrics:
@@ -89,7 +107,8 @@ def summarize(trace: SessionTrace) -> SessionMetrics:
     degraded = False
     if not turns and trace.meta.get("total_cost_usd") is not None:
         # Trace antérieure au nœud turn_result : la méta de session scellée porte
-        # encore le coût. Mesure DÉGRADÉE (aucune durée) plutôt que fausse à zéro.
+        # encore le coût du dernier tour connu. Mesure DÉGRADÉE (aucune durée)
+        # plutôt que fausse à zéro.
         cout_meta = trace.meta.get("total_cost_usd")
         degraded = True
         turns = [
@@ -97,7 +116,7 @@ def summarize(trace: SessionTrace) -> SessionMetrics:
                 index=1,
                 duration_ms=None,
                 duration_api_ms=None,
-                tool_ms=None,
+                non_api_ms=None,
                 cost_usd=cout_meta if isinstance(cout_meta, (int, float)) else None,
                 input_tokens=None,
                 output_tokens=None,
@@ -125,6 +144,17 @@ def summarize(trace: SessionTrace) -> SessionMetrics:
             if node.ts is not None and res.ts is not None:
                 duree = (res.ts - node.ts).total_seconds() * 1000
         tools.append(ToolMetrics(name=nom, duration_ms=duree, is_error=erreur))
+
+    # Totaux : None quand aucun composant n'est connu ; partiel si mélangé
+    total_cost, cost_partial = _sum_optional([t.cost_usd for t in turns])
+    total_api, api_partial = _sum_optional([t.duration_api_ms for t in turns])
+    total_non_api, non_api_partial = _sum_optional([t.non_api_ms for t in turns])
+    totals_partial = cost_partial or api_partial or non_api_partial
+
+    # Outils mesurés : somme des durées d'appel effectivement appariées
+    tool_durees = [t.duration_ms for t in tools if t.duration_ms is not None]
+    total_tool_measured: float | None = sum(tool_durees) if tool_durees else None
+
     horodates = [n.ts for n in trace.nodes if n.ts is not None]
     return SessionMetrics(
         session_id=trace.session_id,
@@ -136,11 +166,13 @@ def summarize(trace: SessionTrace) -> SessionMetrics:
             if horodates
             else None
         ),
-        total_cost_usd=sum((t.cost_usd or 0.0 for t in turns), 0.0),
-        total_api_ms=sum(t.duration_api_ms or 0 for t in turns),
-        total_tool_ms=sum(t.tool_ms or 0 for t in turns),
+        total_cost_usd=total_cost,
+        total_api_ms=int(total_api) if total_api is not None else None,
+        total_non_api_ms=int(total_non_api) if total_non_api is not None else None,
+        total_tool_measured_ms=total_tool_measured,
         calls_by_tool=calls_by_tool,
         degraded=degraded,
+        totals_partial=totals_partial,
     )
 
 
@@ -148,33 +180,60 @@ def _s(ms: float | None) -> str:
     return "?" if ms is None else f"{ms / 1000:.1f}s"
 
 
+def _cout(v: float | None, partial: bool = False, n_inconnus: int = 0) -> str:
+    if v is None:
+        return "?"
+    if partial and n_inconnus:
+        return f"≥ {v:.4f} USD ({n_inconnus} tour(s) sans coût)"
+    return f"{v:.4f} USD"
+
+
 def render_metrics(m: SessionMetrics) -> str:
     """Rendu texte des mesures (même esprit que ``render.py``)."""
-    # En mode dégradé, les totaux de durée et le décompte de tours seraient FAUX
-    # (0.0s, « 1 tour ») : on affiche « ? » plutôt qu'un chiffre inventé.
+    # Calcul du nombre de tours sans coût (pour le minorant)
+    tours_sans_cout = sum(1 for t in m.turns if t.cost_usd is None) if m.turns else 0
+
     lignes = [
         f"Session {m.session_id} [{m.status}]",
         f"  bout en bout : {_s(m.wall_ms)}"
-        f" · coût total : {m.total_cost_usd:.4f} USD"
+        f" · coût total : {_cout(m.total_cost_usd, m.totals_partial, tours_sans_cout)}"
         f" · {'?' if m.degraded else len(m.turns)} tour(s)",
     ]
     if m.degraded:
         lignes.append(
-            "  (mesure dégradée : trace antérieure à l'instrumentation — coût lu"
-            " dans la méta de session ; durées et détail par tour indisponibles)"
+            "  (mesure dégradée : trace antérieure à l'instrumentation —"
+            " coût du dernier tour connu (minorant) ;"
+            " durées et détail par tour indisponibles)"
         )
     else:
-        lignes.append(
-            f"  dont API : {_s(m.total_api_ms)} · hors LLM : {_s(m.total_tool_ms)}"
-        )
+        # Ligne de durées : uniquement si au moins un total est connu
+        api_s = _s(m.total_api_ms)
+        non_api_s = _s(m.total_non_api_ms)
+        if m.total_api_ms is not None or m.total_non_api_ms is not None:
+            ligne_durees = (
+                f"  dont API : {api_s} · hors API (sur tours mesurés) : {non_api_s}"
+            )
+            if m.total_non_api_ms is not None and m.total_tool_measured_ms is not None:
+                reste_ms = m.total_non_api_ms - m.total_tool_measured_ms
+                ligne_durees += (
+                    f"\n    dont outils mesurés : {_s(m.total_tool_measured_ms)}"
+                    f" · démarrage processus/amorçage : {_s(reste_ms)}"
+                )
+            elif m.total_tool_measured_ms is not None:
+                ligne_durees += (
+                    f"\n    dont outils mesurés : {_s(m.total_tool_measured_ms)}"
+                )
+            lignes.append(ligne_durees)
         if m.turns:
             lignes.append("  Tours :")
             for t in m.turns:
+                in_tok = t.input_tokens if t.input_tokens is not None else "?"
+                out_tok = t.output_tokens if t.output_tokens is not None else "?"
                 lignes.append(
                     f"    #{t.index} {_s(t.duration_ms)}"
-                    f" (API {_s(t.duration_api_ms)}, hors LLM {_s(t.tool_ms)})"
+                    f" (API {_s(t.duration_api_ms)}, hors API {_s(t.non_api_ms)})"
                     f" · {t.cost_usd if t.cost_usd is not None else '?'} USD"
-                    f" · in {t.input_tokens} / out {t.output_tokens} tokens"
+                    f" · in {in_tok} / out {out_tok} tokens"
                 )
     if m.tools:
         lignes.append("  Appels d'outil :")
