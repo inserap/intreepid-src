@@ -145,3 +145,13 @@ def test_open_crashed_session_cannot_be_reopened(tmp_path):
     with pytest.raises(ValueError, match="immuable"):
         with Scribe(db, "s1", "q?", "opus"):
             pass
+
+
+def test_load_remplit_le_ts_des_noeuds(tmp_path):
+    db = tmp_path / "t.duckdb"
+    with Scribe(db, "s1", "q", "opus") as scribe:
+        scribe.record_nodes([("essai", {"x": 1}, {})])
+    trace = load(db, "s1")
+    horodates = [n.ts for n in trace.nodes if n.ts is not None]
+    assert len(horodates) == len(trace.nodes)  # le store date TOUS les nœuds
+    assert horodates == sorted(horodates)  # ordonnés comme les seq
