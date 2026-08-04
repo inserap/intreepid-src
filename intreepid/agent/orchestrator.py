@@ -1,7 +1,8 @@
 """Orchestrateur générique : pilote un agent (profil de rôle) via l'Agent SDK.
 
 Boucle d'exécution commune à tous les rôles (ADR-0009). Phase A : mode one-shot
-(un tour, comme l'analyste). L'accès donnée reste exclusivement via MCP (P2/P3) ;
+(un tour, comme l'analyste) ; mode multi-tours (#7c) : next_input non-None.
+L'accès donnée reste exclusivement via MCP (P2/P3) ;
 la garde OAuth (Q-0010) refuse ANTHROPIC_API_KEY qui masquerait l'abonnement.
 """
 
@@ -44,7 +45,6 @@ async def run_agent(
             " Unset-la (dev = abonnement)."
         )
     options = profile.build_options(model, thinking=trace_to is not None)
-    chunks: list[str] = []
     with contextlib.ExitStack() as stack:
         scribe: Scribe | None = None
         if trace_to is not None:
@@ -55,14 +55,35 @@ async def run_agent(
             except Exception:
                 logger.exception("greffier : capture désactivée (échec ouverture)")
                 scribe = None
-        async for message in query(prompt=prompt, options=options):
-            if scribe is not None:
-                _safe(scribe.record, message)  # capture best-effort (jamais fatale)
-            if isinstance(message, AssistantMessage):
-                for block in message.content:
-                    if isinstance(block, TextBlock):
-                        chunks.append(block.text)
-        result = profile.parse(chunks)
-        if profile.on_result is not None:
-            _safe(profile.on_result, scribe, result)
-        return result
+        multi_turn = profile.next_input is not None
+        transcript: list[dict[str, str]] = [{"user": prompt}]
+        current_prompt = prompt
+        while True:
+            chunks: list[str] = []
+            async for message in query(prompt=current_prompt, options=options):
+                if scribe is not None:
+                    _safe(scribe.record, message)  # capture best-effort (jamais fatale)
+                if isinstance(message, AssistantMessage):
+                    for block in message.content:
+                        if isinstance(block, TextBlock):
+                            chunks.append(block.text)
+            result = profile.parse(chunks)
+            if not multi_turn:
+                if profile.on_result is not None:
+                    _safe(profile.on_result, scribe, result)
+                return result
+            transcript.append({"assistant": "\n".join(chunks)})
+            assert profile.next_input is not None
+            human_reply = profile.next_input(result)
+            if scribe is not None and human_reply is not None:
+                _safe(
+                    scribe.record_nodes,
+                    [("human_turn", {"text": human_reply}, {"actor": "human"})],
+                )
+            if human_reply is None:  # validation humaine => terminal
+                if profile.on_result is not None:
+                    _safe(profile.on_result, scribe, result)
+                return result
+            transcript.append({"user": human_reply})
+            assert profile.build_prompt is not None
+            current_prompt = profile.build_prompt(transcript)

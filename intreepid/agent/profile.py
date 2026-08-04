@@ -25,3 +25,11 @@ class Profile:
     build_options: Callable[..., ClaudeAgentOptions]
     parse: Callable[[list[str]], Any]
     on_result: Callable[[Scribe | None, Any], None] | None = None
+    # Multi-tours (ADR-0009 / #7c). Défaut None => profil ONE-SHOT (non-régression).
+    # Un profil multi-tours DOIT fournir next_input ET build_prompt ensemble.
+    #   next_input : affiche le tour agent + lit la réponse humaine ; retourne la
+    #     réponse, ou None pour signaler la validation (terminaison).
+    #   build_prompt : sérialise l'historique en tour utilisateur
+    #     (charte = system_prompt, byte-stable). Appelé aux tours >= 2.
+    next_input: Callable[[Any], str | None] | None = None
+    build_prompt: Callable[[list[dict[str, str]]], str] | None = None
