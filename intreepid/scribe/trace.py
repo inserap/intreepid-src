@@ -6,6 +6,7 @@ messages factices. La persistance vit dans ``store.py``.
 """
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 
 from claude_agent_sdk import (
@@ -20,7 +21,12 @@ from claude_agent_sdk import (
 
 @dataclass
 class TraceNode:
-    """Un nœud de l'arbre de session (grain événement, kind typé)."""
+    """Un nœud de l'arbre de session (grain événement, kind typé).
+
+    ``ts`` est apposé par le store, jamais par le builder : celui-ci est PUR et
+    déterministe (ids ``{sid}#{seq}``, aucune horloge) — c'est ce qui le rend
+    testable. En capture ``ts`` vaut None ; ``store.load`` le renseigne.
+    """
 
     id: str
     session_id: str
@@ -29,6 +35,7 @@ class TraceNode:
     kind: str
     content: dict[str, Any]
     meta: dict[str, Any] = field(default_factory=dict)
+    ts: datetime | None = None
 
 
 @dataclass
@@ -121,6 +128,23 @@ class TraceBuilder:
                 "total_cost_usd": message.total_cost_usd,
                 "terminal_reason": message.terminal_reason,
             }
+            # La fin de tour est un FAIT D'EXÉCUTION daté, pas une méta de session :
+            # en multi-tours, result_meta ne garde que le dernier tour. Le nœud, lui,
+            # est durable dès la capture et mesurable tour par tour.
+            out.append(
+                self._node(
+                    "turn_result",
+                    {
+                        "duration_ms": message.duration_ms,
+                        "duration_api_ms": message.duration_api_ms,
+                        "num_turns": message.num_turns,
+                        "total_cost_usd": message.total_cost_usd,
+                        "usage": message.usage,
+                        "terminal_reason": message.terminal_reason,
+                    },
+                    self.root.id,
+                )
+            )
         return out
 
     def custom(

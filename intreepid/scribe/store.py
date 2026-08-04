@@ -147,7 +147,7 @@ def load(db_path: str | Path, session_id: str) -> SessionTrace:
         if srow is None:
             raise KeyError(session_id)
         nrows = con.execute(
-            "SELECT id, session_id, seq, parent_id, kind, content, meta FROM nodes "
+            "SELECT id, session_id, seq, parent_id, kind, content, meta, ts FROM nodes "
             "WHERE session_id = ? ORDER BY seq",
             [session_id],
         ).fetchall()
@@ -162,6 +162,7 @@ def load(db_path: str | Path, session_id: str) -> SessionTrace:
             kind=r[4],
             content=json.loads(r[5]),
             meta=json.loads(r[6]),
+            ts=r[7],
         )
         for r in nrows
     ]
