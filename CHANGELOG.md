@@ -8,6 +8,21 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), et le v
 
 (rien pour l'instant)
 
+## [0.10.0] — 2026-08-04
+
+### Ajouté
+- **Curateur conversationnel d'ingestion (couches B+D d'ADR-0009 / brique #7c)** : le **2ᵉ profil d'agent**, qui transforme un dataset **non fiché** en une **fiche `columns`-complète validée** par une conversation REPL human-in-the-loop. Matérialise Q-0021 (« un agent = un profil »).
+- **Orchestrateur multi-tours en-process** (`agent/orchestrator.py`, `agent/profile.py`) : `Profile` gagne 2 champs **optionnels** (`next_input`, `build_prompt`) → défaut = one-shot = **non-régression stricte** de l'analyste. `run_agent` boucle tant que non-terminal (historique **application-owned**, ré-injecté à chaque tour ; charte = `system_prompt` byte-stable) ; un **seul `Scribe`** vit toute la conversation ; `on_result` appelé à la validation **avant** scellement.
+- **Package `agent/curator/`** : `turn.py` (`CuratorTurn` + `parse_curator_turn` — dernier bloc JSON fencé gagne, repli tolérant, Q-0014) ; `fiche_writer.py` (`write_fiche` YAML + hash SHA-256 **idempotent**, garde anti-traversée du nom) ; `surface.py` (REPL, I/O injectés) ; `charter.md` (charte maïeutique **agnostique** — anti-spoiler, doc humaine = `untrusted_data`, `exposures` hors-scope) ; `profile.py` (isolation P2/P3 : allowlist `profile_raw` seul + built-ins retirés ; terminaison = validation humaine ; `on_result` écrit la fiche + grave le nœud durable `curation_validated` portant le hash).
+- Driver `demo_curator.py` (conversation réelle sur OFROU brut, **preuve greffier** in-process) + runbook `demo/brique-7c-curateur.md`. Tests : `test_orchestrator.py` (multi-tours), `test_curator_{turn,fiche_writer,surface,profile}.py`. **113 déterministes verts**, non-régression stricte de l'analyste one-shot.
+
+### Notes
+- MINOR : fonctionnalité additive (2ᵉ profil) ; l'analyste one-shot est **strictement préservé** (champs `Profile` optionnels à défaut one-shot). Aucune ADR mutée (I-2) ; ADR-0009 passera `Accepted` à froid.
+- Walking-skeleton **en-process** assumé : la résilience crash inter-runs (couche B2 `open/append/seal`, rejeu-depuis-greffier) est **différée** (ADR-0009 §4a).
+- **Gate humain (démo)** : mécanisme + **fond** validés — le curateur trouve les vrais pièges OFROU (sévérité inversée `as1`=tué, `at0`/`at00` disjoints, référentiel communal instable sur 15 ans, coordonnées EPSG:2056) et **refuse honnêtement de clore** sur les zones grises. La **naturalité conversationnelle** des questions (encore robotique) = **follow-up dédié** (recoupe Q-0020, maïeutique).
+- Plan validé **SHIP** par 2 passes advisor ; revue finale whole-branch : **Ready to merge**.
+- Structure : regroupement `agent/curator/` (profil+charte+helpers, préfixe supprimé) ; promotion symétrique de l'analyste en `agent/analyst/` = follow-up (session future).
+
 ## [0.9.0] — 2026-08-02
 
 ### Ajouté
