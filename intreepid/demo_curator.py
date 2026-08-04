@@ -29,7 +29,7 @@ def main() -> None:
     prompt = (
         f"Curate le dataset non-fiché situé à : {dataset_path}\n"
         f"Commence par appeler profile_raw sur ce chemin, puis dialogue avec moi "
-        f"colonne par colonne jusqu'à une fiche complète."
+        f"jusqu'à une fiche complète."
     )
     profile = curator_profile(dataset_path, CATALOG, surface=Surface())
     with tempfile.TemporaryDirectory(prefix="curator_demo_") as tmp:

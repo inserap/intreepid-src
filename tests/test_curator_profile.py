@@ -61,6 +61,38 @@ def test_build_prompt_serializes_transcript(tmp_path):
     assert "start" in out and "salut" in out and "ok" in out
 
 
+def test_next_input_ne_valide_jamais_sans_fiche(tmp_path):
+    vus: list[str] = []
+    prof = curator_profile(
+        "d.parquet",
+        tmp_path,
+        surface=Surface(
+            writer=vus.append, reader=lambda _p: "renvoie la fiche complète"
+        ),
+    )
+    turn = CuratorTurn(message="prête ?", fiche_draft=None, proposes_completion=True)
+    next_input = prof.next_input
+    assert next_input is not None
+    # jamais terminal sans fiche : valider ici perdrait toute la session
+    assert next_input(turn) == "renvoie la fiche complète"
+    assert any("Fiche absente" in t for t in vus)
+
+
+def test_next_input_affiche_substitut_si_message_vide(tmp_path):
+    vus: list[str] = []
+    prof = curator_profile(
+        "d.parquet",
+        tmp_path,
+        surface=Surface(writer=vus.append, reader=lambda _p: "reformule"),
+    )
+    turn = CuratorTurn(message="", fiche_draft=None, proposes_completion=False)
+    next_input = prof.next_input
+    assert next_input is not None
+    result = next_input(turn)
+    assert result == "reformule"
+    assert any("[tour vide" in t for t in vus)
+
+
 def test_on_result_writes_fiche_and_records_validation(tmp_path):
     class _Scribe:
         def __init__(self):
