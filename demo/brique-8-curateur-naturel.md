@@ -59,8 +59,15 @@ uv run python -m intreepid.demo_curator data/raw/RoadTrafficAccidentLocations.pa
   documenté**, avec sa procédure de vérification et un repli praticable.
 - **Chronométrer 2 ou 3 tours** : délai entre l'envoi de la réponse et l'affichage
   du tour suivant (référence #7c : ≈ 2 min).
-- Compter le **nombre de tours** jusqu'à la proposition de validation
-  (référence #7c : 8 tours humains).
+- Compter le **nombre de tours** jusqu'à la proposition de validation. Référence du
+  **transcript de référence** : **8 tours pour 7 questions et 36 colonnes**. C'est le
+  relevé qui tranche « une question à la fois allonge-t-elle la séance ? » — question
+  jusqu'ici supposée, jamais mesurée.
+- Vérifier que le curateur pose bien **une seule question par tour**. S'il en groupe
+  plusieurs, la charte n'a pas pris : le noter, ne pas le corriger à l'oral.
+- Relever, dans le bloc « mesures » de fin de run, la ligne **`Sortie écrite : prose
+  … · thinking …`**. Elle répond à la question ouverte de la slice : ce qui coûte
+  cher, est-ce le texte lu par l'humain ou le raisonnement ?
 - Noter si des **préambules d'outil** (« je vais d'abord profiler… ») apparaissent
   avant le verrou : la prose hors JSON les rend désormais visibles.
 - Noter si l'on a **contredit le penchant** du curateur au moins une fois. Le gold
@@ -75,15 +82,16 @@ uv run python -m intreepid.demo_curator data/raw/RoadTrafficAccidentLocations.pa
 > Les commandes des critères **c** à **g** se lancent dans le **même terminal** :
 > la variable `$FICHE` est posée au critère c et réutilisée ensuite.
 
-- [ ] **a. Premier tour déjà au niveau** : chaque question du **premier** tour porte
+- [ ] **a. Premier tour déjà au niveau** : la question du **premier** tour porte
   son objet, un ancrage chiffré tiré du profil, l'enjeu du mauvais choix rendu
   tangible par un mécanisme concret, des options fermées, « je ne sais pas »
   déclaré valide, et le **penchant** de l'agent avec l'indice qui l'y pousse.
 - [ ] **b. Zéro consigne de style** : la séance s'est déroulée sans qu'on ait eu
   besoin de corriger la forme.
-- [ ] **c. Fiche complète** : la fiche écrite couvre les **36 colonnes** — test de
-  non-régression du draft tardif (il n'est émis qu'au dernier tour). Le chemin
-  exact est celui imprimé par le run (« ✓ fiche écrite : <chemin> ») :
+- [ ] **c. Fiche complète** : la fiche écrite couvre les **36 colonnes**. Le brouillon
+  étant désormais émis et tenu à jour à **chaque** tour (retour au contrat v0.10.0),
+  ce critère n'est plus un test du « draft tardif » mais une simple vérification de
+  couverture. Le chemin exact est celui imprimé par le run (« ✓ fiche écrite : … ») :
   ```bash
   FICHE=$(ls -t catalog/*.fiche.yaml | head -1) && echo "$FICHE"
   uv run python -c "import yaml,sys; d=yaml.safe_load(open(sys.argv[1],encoding='utf-8')); print(len(d.get('columns',{})),'colonnes')" "$FICHE"
@@ -93,7 +101,10 @@ uv run python -m intreepid.demo_curator data/raw/RoadTrafficAccidentLocations.pa
   `catalog/` : si un fixture y a été touché entre-temps, on compterait les colonnes
   du mauvais fichier et on croirait la fiche complète.
 - [ ] **d. Latence et volume notés** : temps par tour et nombre de tours consignés,
-  en regard des ≈ 2 min × 8 tours de #7c.
+  en regard des ≈ 2 min × 8 tours de #7c. Ce chiffre est une **tendance**, pas une
+  constante : la fiche complète est désormais ré-émise en sortie et réinjectée en
+  entrée à chaque tour, ce qui fait croître la latence au fil de la séance à mesure
+  que la fiche se remplit — un **effet de design attendu**, pas une régression.
 - [ ] **e. Preuve greffier** : bloc « preuve greffier » en fin de run — `statut
   session = closed`, ≥ 1 tour humain, **1 nœud `curation_validated`** avec dataset
   et hash.
@@ -134,5 +145,6 @@ réaction au merge — leçon #7c.
 | Fichier parquet introuvable | `ls data/raw/RoadTrafficAccidentLocations.parquet` depuis `intreepid/src` |
 | `ANTHROPIC_API_KEY` définie par erreur | `unset ANTHROPIC_API_KEY` avant de relancer |
 | L'agent propose la validation sans fiche | Le curateur ne peut plus terminer là-dessus : lui demander la fiche complète à l'invite, ou `Ctrl+C` |
-| Fiche écrite incomplète (< 36 colonnes) | Ne pas re-tuner : c'est le risque « draft tardif » du design ; repli documenté = réintroduire l'émission du draft à chaque tour |
+| Fiche écrite incomplète (< 36 colonnes) | Le brouillon est émis à chaque tour : une colonne manquante signifie que l'agent ne l'a jamais tranchée. Lui demander de compléter à l'invite **avant** de valider. |
+| Le curateur groupe plusieurs questions dans un tour | Ne rien dire, terminer la séance, le noter. C'est le signal que la charte n'a pas pris. |
 | La fiche écrite écrase un fixture tracké de `catalog/` | `git restore catalog/<fichier>` ; renommer à la main la fiche produite |
