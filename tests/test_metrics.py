@@ -356,6 +356,59 @@ def test_aucun_residu_negatif_dans_le_rendu() -> None:
     assert "outils mesurés (horodatages greffier)" in out
 
 
+def test_tokens_de_cache_sont_affiches() -> None:
+    """Taire le cache donne une image fausse de l'entrée (6 facturés, 43 781 lus)."""
+    tour = _node(
+        1,
+        "turn_result",
+        {
+            "duration_ms": 141_200,
+            "duration_api_ms": 138_800,
+            "num_turns": 1,
+            "total_cost_usd": 0.4194,
+            "usage": {
+                "input_tokens": 6,
+                "output_tokens": 9_939,
+                "cache_read_input_tokens": 43_781,
+                "cache_creation_input_tokens": 14_900,
+            },
+            "terminal_reason": "completed",
+        },
+        offset_s=0.0,
+    )
+    m = summarize(_trace([tour]))
+    assert m.turns[0].cache_read_tokens == 43_781
+    assert m.turns[0].cache_creation_tokens == 14_900
+    assert "cache 43781 lus / 14900 créés" in render_metrics(m)
+
+
+def test_cache_absent_saffiche_inconnu_pas_zero() -> None:
+    m = summarize(_trace([_tour(1, 0.0)]))  # usage sans clés de cache
+    assert m.turns[0].cache_read_tokens is None
+    assert "cache ?" in render_metrics(m)
+
+
+def test_attribution_de_la_sortie_prose_vs_thinking() -> None:
+    """La sortie devient attribuable : prose lue par l'humain vs thinking."""
+    nodes = [
+        _node(1, "thinking", {"text": "x" * 8_396}, offset_s=0.0),
+        _node(2, "agent_turn", {"text": "y" * 1_200}, {"actor": "agent"}, 1.0),
+        _tour(3, 2.0),
+    ]
+    m = summarize(_trace(nodes))
+    assert m.thinking_chars == 8_396
+    assert m.prose_chars == 1_200
+    out = render_metrics(m)
+    assert "prose" in out and "thinking" in out
+
+
+def test_attribution_inconnue_sans_noeud_dedie() -> None:
+    """Une trace d'analyste one-shot ne porte aucun agent_turn : None, pas 0."""
+    m = summarize(_trace([_tour(1, 0.0)]))
+    assert m.prose_chars is None
+    assert m.thinking_chars is None
+
+
 def test_resultat_sans_appel_connu_ne_casse_pas_l_appariement() -> None:
     """Un tool_result parenté à la racine (appel inconnu) est ignoré sans erreur.
 

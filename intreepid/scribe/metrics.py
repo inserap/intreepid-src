@@ -18,6 +18,11 @@ amorce un serveur MCP en sous-processus à CHAQUE tour : ce démarrage de proces
 et cet amorçage tombent entièrement dans ce chiffre. Il N'EST PAS assimilable au
 coût des outils — ``total_tool_measured_ms`` mesure ceux-ci séparément via
 l'appariement des horodatages call/result.
+
+L'attribution de la sortie (``prose_chars``/``thinking_chars``) est donnée en
+CARACTÈRES, pas en tokens : le SDK ne ventile pas ``output_tokens``, et inventer
+une conversion serait faux. Elle répond à « prose ou thinking ? », pas à
+« combien de tokens exactement ? ».
 """
 
 from dataclasses import dataclass
@@ -37,6 +42,8 @@ class TurnMetrics:
     cost_usd: float | None
     input_tokens: int | None
     output_tokens: int | None
+    cache_read_tokens: int | None
+    cache_creation_tokens: int | None
 
 
 @dataclass(frozen=True)
@@ -62,6 +69,8 @@ class SessionMetrics:
     total_non_api_ms: int | None
     total_tool_measured_ms: float | None
     calls_by_tool: dict[str, int]
+    prose_chars: int | None
+    thinking_chars: int | None
     degraded: bool = False
 
 
@@ -85,6 +94,8 @@ def _turn(index: int, node: TraceNode) -> TurnMetrics:
         cost_usd=cout if isinstance(cout, (int, float)) else None,
         input_tokens=_int_or_none(usage.get("input_tokens")),
         output_tokens=_int_or_none(usage.get("output_tokens")),
+        cache_read_tokens=_int_or_none(usage.get("cache_read_input_tokens")),
+        cache_creation_tokens=_int_or_none(usage.get("cache_creation_input_tokens")),
     )
 
 
@@ -142,6 +153,8 @@ def summarize(trace: SessionTrace) -> SessionMetrics:
                 cost_usd=cout_meta if isinstance(cout_meta, (int, float)) else None,
                 input_tokens=None,
                 output_tokens=None,
+                cache_read_tokens=None,
+                cache_creation_tokens=None,
             )
         ]
     # Appariement par PARENTÉ : le builder parente chaque tool_result à son
@@ -186,6 +199,19 @@ def summarize(trace: SessionTrace) -> SessionMetrics:
     # multipliait ce temps par le nombre d'appels parallèles.
     total_tool_measured: float | None = _duree_union(intervalles)
 
+    # Attribution de la SORTIE, en totaux de session : agent_turn est enregistré
+    # APRÈS son turn_result, donc un découpage par tour supposerait un ordre.
+    # None (et non 0) quand le kind est absent : une trace d'analyste one-shot
+    # n'a pas de agent_turn, sa prose n'est pas inconnue à zéro.
+    prose = [
+        len(str(n.content.get("text", "")))
+        for n in trace.nodes
+        if n.kind == "agent_turn"
+    ]
+    pensee = [
+        len(str(n.content.get("text", ""))) for n in trace.nodes if n.kind == "thinking"
+    ]
+
     horodates = [n.ts for n in trace.nodes if n.ts is not None]
     return SessionMetrics(
         session_id=trace.session_id,
@@ -203,6 +229,8 @@ def summarize(trace: SessionTrace) -> SessionMetrics:
         total_non_api_ms=int(total_non_api) if total_non_api is not None else None,
         total_tool_measured_ms=total_tool_measured,
         calls_by_tool=calls_by_tool,
+        prose_chars=sum(prose) if prose else None,
+        thinking_chars=sum(pensee) if pensee else None,
         degraded=degraded,
     )
 
@@ -255,12 +283,27 @@ def render_metrics(m: SessionMetrics) -> str:
             for t in m.turns:
                 in_tok = t.input_tokens if t.input_tokens is not None else "?"
                 out_tok = t.output_tokens if t.output_tokens is not None else "?"
+                cache_r = t.cache_read_tokens
+                cache_c = t.cache_creation_tokens
+                cache = (
+                    "cache ?"
+                    if cache_r is None and cache_c is None
+                    else f"cache {cache_r if cache_r is not None else '?'} lus"
+                    f" / {cache_c if cache_c is not None else '?'} créés"
+                )
                 lignes.append(
                     f"    #{t.index} {_s(t.duration_ms)}"
                     f" (API {_s(t.duration_api_ms)}, hors API {_s(t.non_api_ms)})"
                     f" · {_cout(t.cost_usd)}"
-                    f" · in {in_tok} / out {out_tok} tokens"
+                    f" · in {in_tok} ({cache}) / out {out_tok} tokens"
                 )
+    if m.prose_chars is not None or m.thinking_chars is not None:
+        prose = "?" if m.prose_chars is None else str(m.prose_chars)
+        pensee = "?" if m.thinking_chars is None else str(m.thinking_chars)
+        lignes.append(
+            f"  Sortie écrite : prose {prose} car. · thinking {pensee} car."
+            " (caractères, pas tokens)"
+        )
     if m.tools:
         lignes.append("  Appels d'outil :")
         for outil in m.tools:
