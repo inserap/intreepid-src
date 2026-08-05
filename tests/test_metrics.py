@@ -353,7 +353,10 @@ def test_aucun_residu_negatif_dans_le_rendu() -> None:
     assert "démarrage" not in out
     # les deux chiffres cohabitent, chacun avec son horloge nommée
     assert "hors API (horloge SDK)" in out
+    # le total est une UNION d'intervalles : le dire, sinon les lignes par appel
+    # semblent ne pas s'additionner au total sur des appels parallèles
     assert "outils mesurés (horodatages greffier)" in out
+    assert "(union des intervalles)" in out
 
 
 def test_tokens_de_cache_sont_affiches() -> None:
@@ -388,8 +391,13 @@ def test_cache_absent_saffiche_inconnu_pas_zero() -> None:
     assert "cache ?" in render_metrics(m)
 
 
-def test_attribution_de_la_sortie_prose_vs_thinking() -> None:
-    """La sortie devient attribuable : prose lue par l'humain vs thinking."""
+def test_attribution_de_la_sortie_tour_agent_vs_thinking() -> None:
+    """La sortie devient attribuable : tour d'agent ENTIER vs thinking.
+
+    Le libellé doit dire « tour d'agent » et annoncer ce qu'il agrège (prose +
+    bloc de métadonnées) : le nœud de tour porte tout le texte émis, et un
+    libellé « prose » ferait lire le brouillon de fiche comme de la prose.
+    """
     nodes = [
         _node(1, "thinking", {"text": "x" * 8_396}, offset_s=0.0),
         _node(2, "agent_turn", {"text": "y" * 1_200}, {"actor": "agent"}, 1.0),
@@ -399,7 +407,8 @@ def test_attribution_de_la_sortie_prose_vs_thinking() -> None:
     assert m.thinking_chars == 8_396
     assert m.prose_chars == 1_200
     out = render_metrics(m)
-    assert "prose" in out and "thinking" in out
+    assert "tour d'agent 1200 car. (prose + bloc de métadonnées)" in out
+    assert "thinking 8396 car." in out
 
 
 def test_attribution_inconnue_sans_noeud_dedie() -> None:

@@ -4,7 +4,7 @@
 > relit le YAML final et valide avant le merge. La démo, pas seulement les tests verts,
 > est le critère de passage.
 
-> **Note (brique #8, `v0.11.0`)** : ce runbook décrit la démo telle qu'elle s'est
+> **Note (brique #8, `v0.12.0`)** : ce runbook décrit la démo telle qu'elle s'est
 > déroulée en `v0.10.0`. Le comportement conversationnel a changé depuis (forme de
 > tour prescrite, plus de passe colonne par colonne, prose hors du bloc JSON) :
 > pour rejouer une curation aujourd'hui, suivre
@@ -67,7 +67,7 @@ uv run python -m intreepid.demo_curator data/raw/RoadTrafficAccidentLocations.pa
    hypothèses, une à quelques colonnes par tour :
    - Il émet sa prose, puis un bloc JSON fencé de métadonnées
      `{"fiche_draft": …, "proposes_completion": false}` (contrat changé en
-     `v0.11.0` / brique #8 : la prose n'est plus dans le JSON).
+     `v0.12.0` / brique #8 : la prose n'est plus dans le JSON).
    - Son message s'affiche dans le terminal ; l'humain tape sa réponse (corrections,
      confirmations, précisions métier).
    - Exemples de questions attendues :

@@ -3,9 +3,9 @@
 Logique PURE (aucun I/O) : la mesure n'est pas un organe de télémétrie, c'est une
 LECTURE de ce que le greffier capture déjà — nœuds horodatés et paires
 ``tool_call``/``tool_result``. Agnostique du rôle : ne dispatche que sur les kinds
-du socle (``turn_result``, ``tool_call``, ``tool_result``), jamais sur un
-vocabulaire métier. Le coût est donné PAR TOUR : le SDK ne le ventile pas par
-outil, et l'inventer serait faux.
+du socle (``turn_result``, ``agent_turn``, ``thinking``, ``tool_call``,
+``tool_result``), jamais sur un vocabulaire métier. Le coût est donné PAR TOUR : le
+SDK ne le ventile pas par outil, et l'inventer serait faux.
 
 Une limite à connaître : plusieurs ``ToolUseBlock`` d'un même message ont des
 horodatages VOISINS — le store date nœud par nœud, jamais par lot — donc leurs
@@ -21,8 +21,14 @@ l'appariement des horodatages call/result.
 
 L'attribution de la sortie (``prose_chars``/``thinking_chars``) est donnée en
 CARACTÈRES, pas en tokens : le SDK ne ventile pas ``output_tokens``, et inventer
-une conversion serait faux. Elle répond à « prose ou thinking ? », pas à
-« combien de tokens exactement ? ».
+une conversion serait faux. Elle répond à « tour d'agent ou thinking ? », pas à
+« combien de tokens exactement ? ». ``prose_chars`` agrège le TOUR D'AGENT ENTIER
+— prose ET bloc de métadonnées : le socle enregistre le texte émis du tour en un
+seul nœud et n'a pas à connaître la structure interne d'un rôle (un curateur y
+ré-émet sa fiche complète à chaque tour, ce qui peut dominer le chiffre).
+``thinking_chars`` est mesuré sur le RÉSUMÉ du raisonnement — seul ce résumé est
+renvoyé par le SDK, alors que la facturation porte sur le raisonnement ENTIER :
+c'est donc un MINORANT, non commensurable en coût avec la sortie de l'agent.
 """
 
 from dataclasses import dataclass
@@ -276,7 +282,7 @@ def render_metrics(m: SessionMetrics) -> str:
             # cohabitent, ils ne s'expliquent pas l'un par l'autre.
             lignes.append(
                 f"    outils mesurés (horodatages greffier) :"
-                f" {_s(m.total_tool_measured_ms)}"
+                f" {_s(m.total_tool_measured_ms)} (union des intervalles)"
             )
         if m.turns:
             lignes.append("  Tours :")
@@ -300,9 +306,13 @@ def render_metrics(m: SessionMetrics) -> str:
     if m.prose_chars is not None or m.thinking_chars is not None:
         prose = "?" if m.prose_chars is None else str(m.prose_chars)
         pensee = "?" if m.thinking_chars is None else str(m.thinking_chars)
+        # Libellé « tour d'agent » et non « prose » : le nœud de tour porte TOUT le
+        # texte émis, bloc de métadonnées compris. Le socle reste agnostique du
+        # rôle — il ne sépare pas la prose d'un brouillon de fiche.
         lignes.append(
-            f"  Sortie écrite : prose {prose} car. · thinking {pensee} car."
-            " (caractères, pas tokens)"
+            f"  Sortie écrite : tour d'agent {prose} car."
+            " (prose + bloc de métadonnées)"
+            f" · thinking {pensee} car. (caractères, pas tokens)"
         )
     if m.tools:
         lignes.append("  Appels d'outil :")

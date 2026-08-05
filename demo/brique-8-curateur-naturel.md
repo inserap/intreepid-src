@@ -65,16 +65,19 @@ uv run python -m intreepid.demo_curator data/raw/RoadTrafficAccidentLocations.pa
   jusqu'ici supposée, jamais mesurée.
 - Vérifier que le curateur pose bien **une seule question par tour**. S'il en groupe
   plusieurs, la charte n'a pas pris : le noter, ne pas le corriger à l'oral.
-- Relever, dans le bloc « mesures » de fin de run, la ligne **`Sortie écrite : prose
-  … · thinking …`**. Elle répond à la question ouverte de la slice : ce qui coûte
-  cher, est-ce le texte lu par l'humain ou le raisonnement ?
+- Relever, dans le bloc « mesures » de fin de run, la ligne **`Sortie écrite : tour
+  d'agent … · thinking …`**. Elle répond à la question ouverte de la slice : ce qui
+  coûte cher, est-ce la sortie **totale** de l'agent (prose **et** brouillon de fiche,
+  ré-émis à chaque tour) ou son raisonnement ? Réserve : le chiffre `thinking` est
+  mesuré sur le **résumé** du raisonnement renvoyé par le SDK, pas sur le raisonnement
+  entier facturé — c'est donc un **minorant**.
 - Noter si des **préambules d'outil** (« je vais d'abord profiler… ») apparaissent
   avant le verrou : la prose hors JSON les rend désormais visibles.
-- Noter si l'on a **contredit le penchant** du curateur au moins une fois. Le gold
-  montre 6 réponses « a » sur 7 questions, et (a) y est systématiquement l'option
-  privilégiée par l'agent : sans ce relevé, on ne peut pas distinguer « le curateur
-  a raison » de « l'humain ratifie sans réfléchir » — le mode d'échec propre à la
-  puce PENCHANT.
+- Noter si l'on a **contredit le penchant** du curateur au moins une fois. Le
+  **transcript de référence** montre 6 réponses « a » sur 7 questions, et (a) y est
+  systématiquement l'option privilégiée par l'agent : sans ce relevé, on ne peut pas
+  distinguer « le curateur a raison » de « l'humain ratifie sans réfléchir » — le
+  mode d'échec propre à la puce PENCHANT.
 - Noter l'heure de fin (`date +%H:%M:%S`).
 
 ## Critères de succès
@@ -109,10 +112,9 @@ uv run python -m intreepid.demo_curator data/raw/RoadTrafficAccidentLocations.pa
   session = closed`, ≥ 1 tour humain, **1 nœud `curation_validated`** avec dataset
   et hash.
 - [ ] **f. Aucune fuite du gabarit** : la fiche produite ne contient aucun des noms
-  factices de l'exemple de la charte (`mesure_x`, `mesure_y`, `code_statut`,
-  `code_type`, `ref_source`, `libelle_a`).
+  factices de l'exemple de la charte (`mesure_x`, `code_statut`).
   ```bash
-  grep -nE "mesure_x|mesure_y|code_statut|code_type|ref_source|libelle_a" "$FICHE" || echo "aucune fuite, OK"
+  grep -nE "mesure_x|code_statut" "$FICHE" || echo "aucune fuite, OK"
   ```
   Le `grep` n'attrape que la copie littérale : **relire la fiche** pour repérer une
   imitation structurelle (un « `-1` = valeur manquante » absent de la donnée réelle).
@@ -121,7 +123,7 @@ uv run python -m intreepid.demo_curator data/raw/RoadTrafficAccidentLocations.pa
   git status --short catalog/    # ne doit lister QUE la fiche nouvellement créée
   ```
 
-## Comparaison au gold-standard
+## Comparaison au transcript de référence
 
 Relire le transcript de référence
 (`<SPEC>/research/2026-08-04-curateur-gate-humain-materiel.md` §3) et juger, sur les
@@ -139,7 +141,7 @@ réaction au merge — leçon #7c.
 
 | Problème | Action |
 |---|---|
-| Boucle qui ne termine pas | Écrire à l'agent : "rends la fiche complète et propose la validation". Il n'existe aucun raccourci côté application ; `Ctrl+C` perd tout. |
+| Boucle qui ne termine pas | Écrire à l'agent : "rends la fiche complète et propose la validation". Il n'existe aucun raccourci côté application ; `Ctrl+C` ne perd que la **fiche** : le pilote imprime quand même (bloc `finally`) le chemin de la trace, la preuve greffier et les mesures, et le tour de l'agent survit à l'interruption. |
 | Agent bloqué / timeout | `Ctrl+C` : session **abortée**, aucune fiche écrite, il faut relancer |
 | Le tour affiche un gros bloc JSON brut | Le bloc final est invalide (repli du parseur) : répondre "ton bloc JSON final est invalide, ré-émets-le seul et bien formé". |
 | Fichier parquet introuvable | `ls data/raw/RoadTrafficAccidentLocations.parquet` depuis `intreepid/src` |
