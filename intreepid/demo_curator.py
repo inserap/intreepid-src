@@ -5,6 +5,7 @@ Modèle opus ; garde OAuth Q-0010 (CLAUDE_CODE_OAUTH_TOKEN, pas ANTHROPIC_API_KE
 Gate humain : l'humain dialogue au terminal, relit le YAML final, valide.
 La trace est conservée dans traces/ (*.duckdb gitignorés) ; relecture :
   uv run python -m intreepid.metrics_report traces/<fichier>.duckdb
+Le thinking est demandé explicitement (les nœuds 💭 de la trace en dépendent).
 """
 
 import sys
@@ -39,7 +40,9 @@ def main() -> None:
     traces.mkdir(parents=True, exist_ok=True)
     db = traces / f"curator-{uuid.uuid4().hex[:8]}.duckdb"
     try:
-        anyio.run(lambda: run_agent(profile, prompt, model="opus", trace_to=db))
+        anyio.run(
+            lambda: run_agent(profile, prompt, model="opus", trace_to=db, thinking=True)
+        )
     finally:
         # Quoi qu'il arrive (interruption clavier, exception), le chemin et la ligne
         # de relecture sont imprimés : c'est la session dont on veut le coût.

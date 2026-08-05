@@ -183,6 +183,39 @@ async def test_run_agent_oneshot_nenregistre_pas_agent_turn(monkeypatch, tmp_pat
     assert [n.kind for n in tr.nodes if n.kind == "agent_turn"] == []
 
 
+async def test_thinking_est_transmis_tel_quel_sans_deriver_de_la_trace(
+    monkeypatch, tmp_path
+):
+    """Le socle ne décide pas du thinking : il transmet ce qu'on lui donne.
+
+    Sans ça, tracer une session change ce qu'elle coûte (effet d'observateur) :
+    le thinking étendu s'activait du seul fait de la présence du greffier.
+    """
+    vus: list[bool] = []
+
+    async def fake_query(*, prompt, options):
+        yield AssistantMessage(content=[TextBlock(text="v")], model="m")
+
+    def _build_options(model, thinking):
+        vus.append(thinking)
+        return ClaudeAgentOptions()
+
+    monkeypatch.setattr("intreepid.agent.orchestrator.query", fake_query)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    prof = Profile(
+        role="test",
+        build_options=_build_options,
+        parse=lambda chunks: "\n".join(chunks),
+    )
+
+    # tracé mais thinking non demandé => False (aujourd'hui : True)
+    await run_agent(prof, "hi", trace_to=tmp_path / "a.duckdb")
+    # non tracé mais thinking demandé => True (aujourd'hui : False)
+    await run_agent(prof, "hi", thinking=True)
+
+    assert vus == [False, True]
+
+
 async def test_agent_turn_survit_a_une_interruption_humaine(monkeypatch, tmp_path):
     """Ctrl+C pendant l'attente humaine ne doit pas perdre le tour de l'agent."""
 

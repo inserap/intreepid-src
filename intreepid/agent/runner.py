@@ -21,4 +21,13 @@ async def run_analysis(
     model: str | None = "opus",
     trace_to: str | Path | None = None,
 ) -> list[Observation]:
-    return await run_agent(analyst_profile(), question, model=model, trace_to=trace_to)
+    # Non-régression stricte : l'analyste conserve le comportement historique
+    # (thinking capturé quand — et seulement quand — la session est tracée).
+    # Le choix du thinking sur ses propres mérites est un follow-up.
+    return await run_agent(
+        analyst_profile(),
+        question,
+        model=model,
+        trace_to=trace_to,
+        thinking=trace_to is not None,
+    )

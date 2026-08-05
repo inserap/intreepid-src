@@ -38,13 +38,16 @@ async def run_agent(
     *,
     model: str | None = None,
     trace_to: str | Path | None = None,
+    thinking: bool = False,
 ) -> Any:
     if os.environ.get("ANTHROPIC_API_KEY"):
         raise RuntimeError(
             "ANTHROPIC_API_KEY est définie : elle masque CLAUDE_CODE_OAUTH_TOKEN."
             " Unset-la (dev = abonnement)."
         )
-    options = profile.build_options(model, thinking=trace_to is not None)
+    # Le thinking est DÉCLARÉ par l'appelant, jamais dérivé de la présence du
+    # greffier : sinon mesurer une session change ce qu'elle coûte.
+    options = profile.build_options(model, thinking=thinking)
     with contextlib.ExitStack() as stack:
         scribe: Scribe | None = None
         if trace_to is not None:
