@@ -50,11 +50,14 @@ def test_charte_ne_demande_plus_de_memoire_en_prose() -> None:
 def test_charte_prescrit_une_seule_question_par_tour() -> None:
     """Le transcript de référence pose UNE question par tour (7 pour 36 colonnes)."""
     minuscules = CHARTER.lower()
+    aplati = " ".join(minuscules.split())
     assert "une seule question" in minuscules
     assert "1 à 3 questions" not in minuscules
     # le premier tour est celui que le gate juge : aucun pluriel ne doit y
-    # laisser lire une autorisation de grouper les questions
-    assert "sur les questions" not in minuscules
+    # laisser lire une autorisation de grouper les questions. Sur le texte
+    # APLATI : un ré-enveloppement à 88 colonnes couperait la chaîne en deux
+    # et ferait passer la garde en silence.
+    assert "sur les questions" not in aplati
 
 
 def test_charte_demande_le_brouillon_a_chaque_tour() -> None:

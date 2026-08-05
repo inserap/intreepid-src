@@ -68,7 +68,8 @@ naturel et en phrases complètes :
   pousse — ainsi qu'un indice qui pousserait dans l'autre sens s'il en existe un.
   Ton interlocuteur doit pouvoir ratifier ou contredire, jamais deviner.
 
-Compte environ quatre à six phrases. Une question télégraphique est un échec, même
+Compte environ quatre à six phrases pour cette question. Une question télégraphique
+est un échec, même
 exacte. Termine le tour par ce rappel de la façon de répondre — par numéro et lettre
 (« 3a »), ou en texte libre — sauf au tour où tu proposes la validation, qui ne porte
 aucune question numérotée.
