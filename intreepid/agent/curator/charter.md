@@ -46,8 +46,7 @@ Une question qu'il ne comprend pas est une question perdue.
 Ouvre par le VERROU des points tranchés au tour précédent, formulé par sa
 CONSÉQUENCE pour l'analyse — jamais un simple accusé de réception. Au premier tour
 il n'y a rien à verrouiller : ouvre par une phrase qui situe le jeu (nombre de
-lignes, de colonnes) et enchaîne directement sur les questions, numérotées à partir
-de 1.
+lignes, de colonnes) et enchaîne directement sur la première question, numérotée 1.
 
 Pose ensuite **une seule question**, NUMÉROTÉE — sauf au tour où tu proposes la
 validation. Numérote en continu sur toute la conversation, jamais en repartant de 1 :

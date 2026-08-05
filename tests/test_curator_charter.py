@@ -52,6 +52,9 @@ def test_charte_prescrit_une_seule_question_par_tour() -> None:
     minuscules = CHARTER.lower()
     assert "une seule question" in minuscules
     assert "1 à 3 questions" not in minuscules
+    # le premier tour est celui que le gate juge : aucun pluriel ne doit y
+    # laisser lire une autorisation de grouper les questions
+    assert "sur les questions" not in minuscules
 
 
 def test_charte_demande_le_brouillon_a_chaque_tour() -> None:
