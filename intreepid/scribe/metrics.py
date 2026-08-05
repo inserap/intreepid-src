@@ -7,11 +7,8 @@ du socle (``turn_result``, ``tool_call``, ``tool_result``), jamais sur un
 vocabulaire métier. Le coût est donné PAR TOUR : le SDK ne le ventile pas par
 outil, et l'inventer serait faux.
 
-Deux limites à connaître. (1) Les ``ts`` d'une trace relue sont des datetime NAÏFS
-(DuckDB), ceux construits en test sont AWARE : ne jamais comparer les deux mondes,
-les écarts internes à une trace restent justes (piège DST sur une session à cheval
-sur un changement d'heure). (2) Plusieurs ``ToolUseBlock`` d'un même message
-partagent l'instant d'observation : leurs durées valent alors celle du lot.
+Une limite à connaître : plusieurs ``ToolUseBlock`` d'un même message partagent
+l'instant d'observation ; leurs durées valent alors celle du lot.
 
 Interprétation du temps hors API (``non_api_ms``) : c'est la soustraction
 ``duration_ms − duration_api_ms``. L'orchestrateur relance un processus CLI et

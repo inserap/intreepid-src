@@ -183,9 +183,10 @@ def test_trace_sans_tour_avec_outils_affiche_inconnu() -> None:
 
 
 def test_bout_en_bout_capture_relecture_mesure(tmp_path) -> None:
-    # Les 6 tests ci-dessus opèrent sur des ts timezone-AWARE construits à la main ;
-    # le chemin réel (DuckDB) rend des datetime NAÏFS. Ce test ferme l'écart en
-    # exerçant capture -> DuckDB -> load -> summarize, sans aucun appel LLM.
+    # Les tests ci-dessus opèrent sur des ts construits à la main ; ce test ferme
+    # l'écart en exerçant le chemin réel capture -> DuckDB -> load -> summarize,
+    # sans aucun appel LLM. Depuis le passage à l'UTC, load rend des datetime
+    # AWARE : les deux mondes n'en font plus qu'un.
     db = tmp_path / "t.duckdb"
     with Scribe(db, "s1", "q", "opus") as sc:
         sc.record(

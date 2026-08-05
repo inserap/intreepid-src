@@ -4,6 +4,7 @@
 distinct des sources (P3), insère chaque nœud de façon incrémentale (durable dès
 la capture) et scelle la session en sortie — ``closed`` en sortie normale,
 ``aborted`` + raison sur exception/interruption. ``load`` réhydrate un arbre (P4).
+Le temps est stocké en **UTC naïf** et rendu *aware* par ``load`` (cf. ``_now``).
 Append-only : une session déjà présente n'est jamais réécrite.
 """
 
@@ -32,7 +33,16 @@ _NODES_DDL = (
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    """Instant courant en UTC **naïf** — la convention de stockage de la trace.
+
+    La colonne est typée ``TIMESTAMP`` (sans fuseau) : un datetime *aware* y
+    serait converti vers le fuseau de session PUIS dépouillé, donc la base
+    porterait de l'heure locale et les écarts d'une session à cheval sur un
+    changement d'heure seraient faux. On écrit donc de l'UTC naïf ; ``load``
+    rattache le fuseau à la relecture. (``TIMESTAMPTZ`` a été écarté : le client
+    Python de DuckDB exige ``pytz`` pour le relire.)
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 class Scribe:
@@ -137,7 +147,13 @@ class Scribe:
 
 
 def load(db_path: str | Path, session_id: str) -> SessionTrace:
-    """Réhydrate un arbre de session depuis le store (P4, lecture read-only)."""
+    """Réhydrate un arbre de session depuis le store (P4, lecture read-only).
+
+    Les ``ts`` sont rendus *aware* en UTC. Réserve sur les traces **antérieures**
+    à ce correctif : leur base porte de l'heure locale, donc elles seront
+    étiquetées UTC à tort — les écarts internes restent justes, seul
+    l'horodatage absolu est décalé du fuseau.
+    """
     con = duckdb.connect(str(db_path), read_only=True)
     try:
         srow = con.execute(
@@ -162,7 +178,9 @@ def load(db_path: str | Path, session_id: str) -> SessionTrace:
             kind=r[4],
             content=json.loads(r[5]),
             meta=json.loads(r[6]),
-            ts=r[7],
+            # la base porte de l'UTC naïf (cf. _now) : on rend un datetime aware,
+            # comparable sans piège aux datetime aware du reste du code
+            ts=r[7].replace(tzinfo=timezone.utc) if r[7] is not None else None,
         )
         for r in nrows
     ]
