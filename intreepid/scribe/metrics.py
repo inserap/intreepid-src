@@ -63,11 +63,13 @@ class SessionMetrics:
     total_tool_measured_ms: float | None
     calls_by_tool: dict[str, int]
     degraded: bool = False
-    totals_partial: bool = False
 
 
 def _int_or_none(value: Any) -> int | None:
-    return value if isinstance(value, int) else None
+    """Coerce en int une valeur numérique ; None sinon. bool exclu à dessein."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return int(value)
 
 
 def _turn(index: int, node: TraceNode) -> TurnMetrics:
@@ -86,13 +88,10 @@ def _turn(index: int, node: TraceNode) -> TurnMetrics:
     )
 
 
-def _sum_optional(values: list[float | int | None]) -> tuple[float | None, bool]:
-    """Somme les valeurs connues ; renvoie (None, False) si aucune, (somme, partiel)."""
+def _sum_optional(values: list[float | int | None]) -> float | None:
+    """Somme les valeurs connues ; None si aucune ne l'est (inconnu ≠ zéro)."""
     known = [v for v in values if v is not None]
-    if not known:
-        return None, False
-    partial = len(known) < len(values)
-    return sum(known), partial
+    return sum(known) if known else None
 
 
 def _duree_union(intervalles: list[tuple[float, float]]) -> float | None:
@@ -176,11 +175,10 @@ def summarize(trace: SessionTrace) -> SessionMetrics:
                 intervalles.append((debut, fin))
         tools.append(ToolMetrics(name=nom, duration_ms=duree, is_error=erreur))
 
-    # Totaux : None quand aucun composant n'est connu ; partiel si mélangé
-    total_cost, cost_partial = _sum_optional([t.cost_usd for t in turns])
-    total_api, api_partial = _sum_optional([t.duration_api_ms for t in turns])
-    total_non_api, non_api_partial = _sum_optional([t.non_api_ms for t in turns])
-    totals_partial = cost_partial or api_partial or non_api_partial
+    # Totaux : None quand aucun composant n'est connu (inconnu ≠ zéro)
+    total_cost = _sum_optional([t.cost_usd for t in turns])
+    total_api = _sum_optional([t.duration_api_ms for t in turns])
+    total_non_api = _sum_optional([t.non_api_ms for t in turns])
 
     # UNION des intervalles, pas somme : plusieurs appels d'un même message ont
     # des horodatages VOISINS (le store date nœud par nœud, jamais par lot),
@@ -196,7 +194,8 @@ def summarize(trace: SessionTrace) -> SessionMetrics:
         tools=tools,
         wall_ms=(
             (max(horodates) - min(horodates)).total_seconds() * 1000
-            if horodates
+            # deux instants minimum : un seul ne fait pas une durée de zéro
+            if len(horodates) >= 2
             else None
         ),
         total_cost_usd=total_cost,
@@ -205,7 +204,6 @@ def summarize(trace: SessionTrace) -> SessionMetrics:
         total_tool_measured_ms=total_tool_measured,
         calls_by_tool=calls_by_tool,
         degraded=degraded,
-        totals_partial=totals_partial,
     )
 
 
@@ -213,10 +211,10 @@ def _s(ms: float | None) -> str:
     return "?" if ms is None else f"{ms / 1000:.1f}s"
 
 
-def _cout(v: float | None, partial: bool = False, n_inconnus: int = 0) -> str:
+def _cout(v: float | None, n_inconnus: int = 0) -> str:
     if v is None:
         return "?"
-    if partial and n_inconnus:
+    if n_inconnus:
         return f"≥ {v:.4f} USD ({n_inconnus} tour(s) sans coût)"
     return f"{v:.4f} USD"
 
@@ -229,7 +227,7 @@ def render_metrics(m: SessionMetrics) -> str:
     lignes = [
         f"Session {m.session_id} [{m.status}]",
         f"  bout en bout : {_s(m.wall_ms)}"
-        f" · coût total : {_cout(m.total_cost_usd, m.totals_partial, tours_sans_cout)}"
+        f" · coût total : {_cout(m.total_cost_usd, tours_sans_cout)}"
         f" · {'?' if m.degraded else len(m.turns)} tour(s)",
     ]
     if m.degraded:
@@ -239,24 +237,19 @@ def render_metrics(m: SessionMetrics) -> str:
             " durées et détail par tour indisponibles)"
         )
     else:
-        # Ligne de durées : uniquement si au moins un total est connu
-        api_s = _s(m.total_api_ms)
-        non_api_s = _s(m.total_non_api_ms)
         if m.total_api_ms is not None or m.total_non_api_ms is not None:
-            ligne_durees = (
-                f"  dont API : {api_s} · hors API (sur tours mesurés) : {non_api_s}"
+            lignes.append(
+                f"  dont API : {_s(m.total_api_ms)}"
+                f" · hors API (horloge SDK) : {_s(m.total_non_api_ms)}"
             )
-            if m.total_non_api_ms is not None and m.total_tool_measured_ms is not None:
-                reste_ms = m.total_non_api_ms - m.total_tool_measured_ms
-                ligne_durees += (
-                    f"\n    dont outils mesurés : {_s(m.total_tool_measured_ms)}"
-                    f" · démarrage processus/amorçage : {_s(reste_ms)}"
-                )
-            elif m.total_tool_measured_ms is not None:
-                ligne_durees += (
-                    f"\n    dont outils mesurés : {_s(m.total_tool_measured_ms)}"
-                )
-            lignes.append(ligne_durees)
+        if m.total_tool_measured_ms is not None:
+            # PAS soustractible du hors-API : autre horloge (horodatages du
+            # greffier, posés à l'observation du message). Les deux chiffres
+            # cohabitent, ils ne s'expliquent pas l'un par l'autre.
+            lignes.append(
+                f"    outils mesurés (horodatages greffier) :"
+                f" {_s(m.total_tool_measured_ms)}"
+            )
         if m.turns:
             lignes.append("  Tours :")
             for t in m.turns:
@@ -265,13 +258,19 @@ def render_metrics(m: SessionMetrics) -> str:
                 lignes.append(
                     f"    #{t.index} {_s(t.duration_ms)}"
                     f" (API {_s(t.duration_api_ms)}, hors API {_s(t.non_api_ms)})"
-                    f" · {t.cost_usd if t.cost_usd is not None else '?'} USD"
+                    f" · {_cout(t.cost_usd)}"
                     f" · in {in_tok} / out {out_tok} tokens"
                 )
     if m.tools:
         lignes.append("  Appels d'outil :")
         for outil in m.tools:
-            marque = " [erreur]" if outil.is_error else ""
+            if outil.is_error is None:
+                marque = " [sans résultat]"  # non apparié ≠ réussi
+            elif outil.is_error:
+                marque = " [erreur]"
+            else:
+                marque = ""
             lignes.append(f"    {outil.name} : {_s(outil.duration_ms)}{marque}")
-        lignes.append(f"  Décompte : {m.calls_by_tool}")
+        decompte = ", ".join(f"{nom} × {n}" for nom, n in m.calls_by_tool.items())
+        lignes.append(f"  Décompte : {decompte}")
     return "\n".join(lignes)

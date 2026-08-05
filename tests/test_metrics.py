@@ -117,7 +117,8 @@ def test_noeud_sans_ts_ne_casse_pas_la_mesure() -> None:
     n1.ts = None
     m = summarize(_trace([n1, n2]))
     assert m.tools[0].duration_ms is None
-    assert m.wall_ms is not None
+    # un seul instant connu ne fait pas une durée : elle est INCONNUE, pas nulle
+    assert m.wall_ms is None
 
 
 def test_trace_vide_ne_leve_pas() -> None:
@@ -282,6 +283,77 @@ def test_appels_sequentiels_additionnent_leurs_durees() -> None:
     ]
     m = summarize(_trace(nodes))
     assert m.total_tool_measured_ms == 4_000.0  # 1 s + 3 s, intervalles disjoints
+
+
+def test_minorant_de_cout_quand_un_tour_na_pas_de_cout() -> None:
+    """Deux tours dont un sans coût : le total est un MINORANT, pas une vérité."""
+    tour_sans_cout = _node(
+        2,
+        "turn_result",
+        {
+            "duration_ms": 100_000,
+            "duration_api_ms": 60_000,
+            "num_turns": 1,
+            "total_cost_usd": None,
+            "usage": {"input_tokens": 10, "output_tokens": 5},
+            "terminal_reason": "completed",
+        },
+        offset_s=100.0,
+    )
+    out = render_metrics(summarize(_trace([_tour(1, 0.0, cost=0.02), tour_sans_cout])))
+    assert "≥ 0.0200 USD" in out
+    assert "1 tour(s) sans coût" in out
+
+
+def test_appel_en_erreur_est_signale() -> None:
+    nodes = [
+        _node(1, "tool_call", {"name": "a", "input": {}}, offset_s=0.0),
+        _node(
+            2,
+            "tool_result",
+            {"content": "boom", "is_error": True},
+            parent_id="s#1",
+            offset_s=1.0,
+        ),
+    ]
+    out = render_metrics(summarize(_trace(nodes)))
+    assert "[erreur]" in out
+
+
+def test_appel_non_apparie_nest_pas_declare_sans_erreur() -> None:
+    """is_error inconnu ne doit pas se lire comme « appel réussi »."""
+    nodes = [_node(1, "tool_call", {"name": "a", "input": {}}, offset_s=0.0)]
+    out = render_metrics(summarize(_trace(nodes)))
+    assert "[erreur]" not in out
+    assert "[sans résultat]" in out
+
+
+def test_wall_ms_inconnu_avec_un_seul_horodatage() -> None:
+    """Un seul instant connu ne fait pas une durée de 0 s : elle est INCONNUE."""
+    m = summarize(_trace([_node(1, "essai", {"x": 1}, offset_s=0.0)]))
+    assert m.wall_ms is None
+    assert "bout en bout : ?" in render_metrics(m)
+
+
+def test_aucun_residu_negatif_dans_le_rendu() -> None:
+    """Hors-API (horloge SDK) et durées d'outil (greffier) ne se soustraient pas."""
+    nodes = [
+        _tour(1, 0.0, dur=5_000, api=2_600),  # hors API = 2,4 s
+        _node(2, "tool_call", {"name": "a", "input": {}}, offset_s=0.0),
+        _node(
+            3,
+            "tool_result",
+            {"content": "ok", "is_error": False},
+            parent_id="s#2",
+            offset_s=3.1,  # outil mesuré 3,1 s > hors API 2,4 s
+        ),
+    ]
+    out = render_metrics(summarize(_trace(nodes)))
+    assert "-0" not in out, f"résidu négatif dans le rendu :\n{out}"
+    assert "démarrage" not in out
+    # les deux chiffres cohabitent, chacun avec son horloge nommée
+    assert "hors API (horloge SDK)" in out
+    assert "outils mesurés (horodatages greffier)" in out
 
 
 def test_resultat_sans_appel_connu_ne_casse_pas_l_appariement() -> None:
