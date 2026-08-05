@@ -137,3 +137,81 @@ def _only_session(db):
         return str(row[0])
     finally:
         con.close()
+
+
+async def test_run_agent_multiturn_records_agent_turns(monkeypatch, tmp_path):
+    """La trace porte les DEUX voix : agent_turn en miroir de human_turn."""
+    turns = iter(["mon tour d'agent", "FINI"])
+
+    async def fake_query(*, prompt, options):
+        from claude_agent_sdk import AssistantMessage, TextBlock
+
+        yield AssistantMessage(content=[TextBlock(text=next(turns))], model="m")
+
+    monkeypatch.setattr("intreepid.agent.orchestrator.query", fake_query)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    db = tmp_path / "cur.duckdb"
+    prof = _script_profile(replies=["ma réponse humaine"], sink=[])
+    await run_agent(prof, "start", trace_to=db)
+
+    from intreepid.scribe.store import load
+
+    tr = load(db, _only_session(db))
+    agents = [n for n in tr.nodes if n.kind == "agent_turn"]
+    assert len(agents) == 2, "un agent_turn par tour, y compris le tour terminal"
+    assert agents[0].content["text"] == "mon tour d'agent"
+    assert agents[0].meta["actor"] == "agent"
+    # le tour de l'agent précède la réponse humaine qu'il provoque
+    humain = next(n for n in tr.nodes if n.kind == "human_turn")
+    assert agents[0].seq < humain.seq
+
+
+async def test_run_agent_oneshot_nenregistre_pas_agent_turn(monkeypatch, tmp_path):
+    """En one-shot, le texte est projeté par on_result : pas de agent_turn."""
+
+    async def fake_query(*, prompt, options):
+        yield AssistantMessage(content=[TextBlock(text="v")], model="m")
+
+    monkeypatch.setattr("intreepid.agent.orchestrator.query", fake_query)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    db = tmp_path / "one.duckdb"
+    await run_agent(_text_profile(), "hi", trace_to=db)
+
+    from intreepid.scribe.store import load
+
+    tr = load(db, _only_session(db))
+    assert [n.kind for n in tr.nodes if n.kind == "agent_turn"] == []
+
+
+async def test_agent_turn_survit_a_une_interruption_humaine(monkeypatch, tmp_path):
+    """Ctrl+C pendant l'attente humaine ne doit pas perdre le tour de l'agent."""
+
+    async def fake_query(*, prompt, options):
+        from claude_agent_sdk import AssistantMessage, TextBlock
+
+        yield AssistantMessage(content=[TextBlock(text="tour ecrit")], model="m")
+
+    monkeypatch.setattr("intreepid.agent.orchestrator.query", fake_query)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+
+    def _next_input_qui_interrompt(result):
+        raise KeyboardInterrupt
+
+    prof = Profile(
+        role="curator-fake",
+        build_options=lambda model, thinking: ClaudeAgentOptions(),
+        parse=lambda chunks: "\n".join(chunks),
+        next_input=_next_input_qui_interrompt,
+        build_prompt=lambda transcript: "x",
+    )
+    db = tmp_path / "abort.duckdb"
+    with pytest.raises(KeyboardInterrupt):
+        await run_agent(prof, "start", trace_to=db)
+
+    from intreepid.scribe.store import load
+
+    tr = load(db, _only_session(db))
+    agents = [n for n in tr.nodes if n.kind == "agent_turn"]
+    assert len(agents) == 1
+    assert agents[0].content["text"] == "tour ecrit"
+    assert tr.status == "aborted"

@@ -72,7 +72,16 @@ async def run_agent(
                 if profile.on_result is not None:
                     _safe(profile.on_result, scribe, result)
                 return result
-            transcript.append({"assistant": "\n".join(chunks)})
+            tour_agent = "\n".join(chunks)
+            transcript.append({"assistant": tour_agent})
+            if scribe is not None:
+                # Miroir de human_turn : la trace d'une conversation doit porter
+                # ses DEUX voix. Enregistré AVANT next_input, qui bloque sur
+                # l'humain — sinon un Ctrl+C perdrait le tour de l'agent.
+                _safe(
+                    scribe.record_nodes,
+                    [("agent_turn", {"text": tour_agent}, {"actor": "agent"})],
+                )
             assert profile.next_input is not None
             human_reply = profile.next_input(result)
             if scribe is not None and human_reply is not None:
