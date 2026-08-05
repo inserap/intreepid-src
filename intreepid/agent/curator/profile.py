@@ -86,8 +86,9 @@ def curator_profile(
         surface.show(result.message or "[tour vide — demande-lui de reformuler]")
         if result.proposes_completion:
             if result.fiche_draft is None:
-                # La fiche n'est émise qu'au tour final : si elle manque, valider
-                # ici perdrait toute la session (on_result n'aurait rien à écrire).
+                # La fiche est émise à chaque tour ; si elle manque au tour de
+                # proposition, valider ici perdrait toute la session (on_result
+                # n'aurait rien à écrire). Garde conservée, désormais improbable.
                 # On ne relance PAS tout seul : une relance automatique boucle sans
                 # borne et s'inscrirait dans la trace comme un tour « humain ».
                 surface.show(

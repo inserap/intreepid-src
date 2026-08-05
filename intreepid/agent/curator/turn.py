@@ -4,8 +4,9 @@ Le tour que l'humain lit est la PROSE, hors blocs fencés — avant ET après le
 dernier bloc. Les blocs antérieurs (quelle que soit leur langue de fence) sont
 retirés du message : une fence illustrative écrite dans la prose disparaît donc
 de l'affichage, cas assumé — mais elle ne déplace plus le « dernier bloc », qui
-reste celui des métadonnées. Ce dernier porte `fiche_draft` (émis au seul tour de
-proposition finale) et `proposes_completion`. Parsing TOLÉRANT : sans bloc, ou
+reste celui des métadonnées. Ce dernier porte `fiche_draft` (la fiche complète
+telle que l'agent la connaît, tenue à jour et émise à CHAQUE tour, jamais
+affichée à l'humain) et `proposes_completion`. Parsing TOLÉRANT : sans bloc, ou
 bloc non-JSON, tout le texte devient le message ; si la prose est vide, repli sur
 un champ `message` du bloc (ancien format). La fiche reste un dict OPAQUE (aucun
 schéma figé).
