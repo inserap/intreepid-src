@@ -17,12 +17,12 @@ from intreepid.scribe.trace import SessionTrace, TraceNode
 _T0 = datetime(2026, 8, 4, 12, 0, 0, tzinfo=timezone.utc)
 
 
-def _node(seq, kind, content, meta=None, offset_s=0.0):
+def _node(seq, kind, content, meta=None, offset_s=0.0, parent_id="s#0"):
     return TraceNode(
         id=f"s#{seq}",
         session_id="s",
         seq=seq,
-        parent_id="s#0",
+        parent_id=parent_id,
         kind=kind,
         content=content,
         meta=meta or {},
@@ -77,6 +77,7 @@ def test_duree_d_un_appel_d_outil_par_appariement() -> None:
             {"content": "x", "is_error": False},
             {"tool_use_id": "t1"},
             12.5,
+            parent_id="s#1",
         ),
     ]
     m = summarize(_trace(nodes))
@@ -106,7 +107,12 @@ def test_noeud_sans_ts_ne_casse_pas_la_mesure() -> None:
     # en capture (hors relecture) ts vaut None : la durée est inconnue, pas fausse
     n1 = _node(1, "tool_call", {"name": "x", "input": {}}, {"tool_use_id": "t1"}, 0.0)
     n2 = _node(
-        2, "tool_result", {"content": "", "is_error": False}, {"tool_use_id": "t1"}, 1.0
+        2,
+        "tool_result",
+        {"content": "", "is_error": False},
+        {"tool_use_id": "t1"},
+        1.0,
+        parent_id="s#1",
     )
     n1.ts = None
     m = summarize(_trace([n1, n2]))
@@ -168,6 +174,7 @@ def test_trace_sans_tour_avec_outils_affiche_inconnu() -> None:
             {"content": "ok", "is_error": False},
             {"tool_use_id": "t1"},
             5.0,
+            parent_id="s#1",
         ),
     ]
     m = summarize(_trace(nodes))
@@ -220,3 +227,81 @@ def test_bout_en_bout_capture_relecture_mesure(tmp_path) -> None:
     assert [t.name for t in m.tools] == ["profile_raw"]
     assert m.tools[0].duration_ms is not None  # ts réels relus, soustraction possible
     assert m.wall_ms is not None
+
+
+def test_appels_simultanes_ne_sont_pas_comptes_deux_fois() -> None:
+    """Deux appels d'un même message ne consomment qu'UNE fois leur intervalle.
+
+    ``_insert`` horodate nœud par nœud : les ts de deux ToolUseBlock d'un même
+    message sont voisins, jamais égaux. Chaque durée vaut donc ~le même
+    intervalle, et les SOMMER le comptait deux fois.
+    """
+    nodes = [
+        _node(1, "tool_call", {"name": "a", "input": {}}, offset_s=0.0),
+        _node(2, "tool_call", {"name": "b", "input": {}}, offset_s=0.001),
+        _node(
+            3,
+            "tool_result",
+            {"content": "ok", "is_error": False},
+            parent_id="s#1",
+            offset_s=2.0,
+        ),
+        _node(
+            4,
+            "tool_result",
+            {"content": "ok", "is_error": False},
+            parent_id="s#2",
+            offset_s=2.001,
+        ),
+    ]
+    m = summarize(_trace(nodes))
+    assert m.total_tool_measured_ms is not None
+    # l'intervalle réellement écoulé est ~2 s, pas ~4 s
+    assert 1_900 <= m.total_tool_measured_ms <= 2_100, m.total_tool_measured_ms
+
+
+def test_appels_sequentiels_additionnent_leurs_durees() -> None:
+    """Deux appels disjoints comptent chacun pour leur propre durée."""
+    nodes = [
+        _node(1, "tool_call", {"name": "a", "input": {}}, offset_s=0.0),
+        _node(
+            2,
+            "tool_result",
+            {"content": "ok", "is_error": False},
+            parent_id="s#1",
+            offset_s=1.0,
+        ),
+        _node(3, "tool_call", {"name": "b", "input": {}}, offset_s=5.0),
+        _node(
+            4,
+            "tool_result",
+            {"content": "ok", "is_error": False},
+            parent_id="s#3",
+            offset_s=8.0,
+        ),
+    ]
+    m = summarize(_trace(nodes))
+    assert m.total_tool_measured_ms == 4_000.0  # 1 s + 3 s, intervalles disjoints
+
+
+def test_resultat_sans_appel_connu_ne_casse_pas_l_appariement() -> None:
+    """Un tool_result parenté à la racine (appel inconnu) est ignoré sans erreur.
+
+    Le builder retombe sur la racine quand il ne retrouve pas l'appel ; l'ancien
+    appariement par tool_use_id le laissait aussi de côté, la nouvelle mécanique
+    par parenté ne doit pas le confondre avec un appel.
+    """
+    nodes = [
+        _node(1, "tool_call", {"name": "a", "input": {}}, offset_s=0.0),
+        _node(
+            2,
+            "tool_result",
+            {"content": "orphelin", "is_error": False},
+            parent_id="s#0",
+            offset_s=1.0,
+        ),
+    ]
+    m = summarize(_trace(nodes))
+    assert len(m.tools) == 1
+    assert m.tools[0].duration_ms is None  # non apparié => durée inconnue
+    assert m.total_tool_measured_ms is None

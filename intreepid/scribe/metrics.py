@@ -7,8 +7,10 @@ du socle (``turn_result``, ``tool_call``, ``tool_result``), jamais sur un
 vocabulaire métier. Le coût est donné PAR TOUR : le SDK ne le ventile pas par
 outil, et l'inventer serait faux.
 
-Une limite à connaître : plusieurs ``ToolUseBlock`` d'un même message partagent
-l'instant d'observation ; leurs durées valent alors celle du lot.
+Une limite à connaître : plusieurs ``ToolUseBlock`` d'un même message ont des
+horodatages VOISINS — le store date nœud par nœud, jamais par lot — donc leurs
+durées recouvrent le même intervalle réel. ``total_tool_measured_ms`` en donne
+l'UNION, pas la somme.
 
 Interprétation du temps hors API (``non_api_ms``) : c'est la soustraction
 ``duration_ms − duration_api_ms``. L'orchestrateur relance un processus CLI et
@@ -93,6 +95,30 @@ def _sum_optional(values: list[float | int | None]) -> tuple[float | None, bool]
     return sum(known), partial
 
 
+def _duree_union(intervalles: list[tuple[float, float]]) -> float | None:
+    """Durée couverte par l'union d'intervalles (secondes epoch) en ms.
+
+    Des appels concurrents se recouvrent : leur coût réel en temps est l'union,
+    non la somme. Aucun intervalle connu => None (inconnu, pas zéro).
+    """
+    if not intervalles:
+        return None
+    total = 0.0
+    fin_courante: float | None = None
+    debut_courant = 0.0
+    for debut, fin in sorted(intervalles):
+        if fin_courante is None:
+            debut_courant, fin_courante = debut, fin
+        elif debut <= fin_courante:
+            fin_courante = max(fin_courante, fin)
+        else:
+            total += fin_courante - debut_courant
+            debut_courant, fin_courante = debut, fin
+    if fin_courante is not None:
+        total += fin_courante - debut_courant
+    return total * 1000
+
+
 def summarize(trace: SessionTrace) -> SessionMetrics:
     """Projette une trace en mesures. Tolérant : un `ts` absent => durée inconnue."""
     turns = [
@@ -119,27 +145,35 @@ def summarize(trace: SessionTrace) -> SessionMetrics:
                 output_tokens=None,
             )
         ]
-    resultats = {
-        str(n.meta["tool_use_id"]): n
-        for n in trace.nodes
-        if n.kind == "tool_result" and n.meta.get("tool_use_id") is not None
-    }
+    # Appariement par PARENTÉ : le builder parente chaque tool_result à son
+    # tool_call (repli sur la racine si l'appel est inconnu). Une seule
+    # mécanique d'appariement dans le code, celle de render.py.
+    resultats: dict[str, TraceNode] = {}
+    ids_appels = {n.id for n in trace.nodes if n.kind == "tool_call"}
+    for n in trace.nodes:
+        # `pid` extrait avant le test : `parent_id` est `str | None`, et compter sur
+        # le narrowing par appartenance à un `set[str]` serait un pari sur pyright.
+        pid = n.parent_id
+        if n.kind == "tool_result" and pid is not None and pid in ids_appels:
+            resultats[pid] = n
     tools: list[ToolMetrics] = []
     calls_by_tool: dict[str, int] = {}
+    intervalles: list[tuple[float, float]] = []
     for node in trace.nodes:
         if node.kind != "tool_call":
             continue
         nom = str(node.content.get("name", "?"))
         calls_by_tool[nom] = calls_by_tool.get(nom, 0) + 1
-        # id absent des deux côtés => pas d'appariement (sinon "None" == "None")
-        tid = node.meta.get("tool_use_id")
-        res = resultats.get(str(tid)) if tid is not None else None
+        res = resultats.get(node.id)
         duree: float | None = None
         erreur: bool | None = None
         if res is not None:
             erreur = res.content.get("is_error")
             if node.ts is not None and res.ts is not None:
-                duree = (res.ts - node.ts).total_seconds() * 1000
+                debut = node.ts.timestamp()
+                fin = res.ts.timestamp()
+                duree = (fin - debut) * 1000
+                intervalles.append((debut, fin))
         tools.append(ToolMetrics(name=nom, duration_ms=duree, is_error=erreur))
 
     # Totaux : None quand aucun composant n'est connu ; partiel si mélangé
@@ -148,9 +182,11 @@ def summarize(trace: SessionTrace) -> SessionMetrics:
     total_non_api, non_api_partial = _sum_optional([t.non_api_ms for t in turns])
     totals_partial = cost_partial or api_partial or non_api_partial
 
-    # Outils mesurés : somme des durées d'appel effectivement appariées
-    tool_durees = [t.duration_ms for t in tools if t.duration_ms is not None]
-    total_tool_measured: float | None = sum(tool_durees) if tool_durees else None
+    # UNION des intervalles, pas somme : plusieurs appels d'un même message ont
+    # des horodatages VOISINS (le store date nœud par nœud, jamais par lot),
+    # donc leurs durées recouvrent le même intervalle réel. Les sommer
+    # multipliait ce temps par le nombre d'appels parallèles.
+    total_tool_measured: float | None = _duree_union(intervalles)
 
     horodates = [n.ts for n in trace.nodes if n.ts is not None]
     return SessionMetrics(
