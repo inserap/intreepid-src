@@ -17,11 +17,60 @@ import duckdb
 
 from intreepid.agent.curator.profile import curator_profile
 from intreepid.agent.curator.surface import Surface
+from intreepid.agent.curator.turn import parse_curator_turn
 from intreepid.agent.orchestrator import run_agent
 from intreepid.scribe.metrics import render_metrics, summarize
 from intreepid.scribe.store import load
+from intreepid.scribe.trace import SessionTrace
 
 CATALOG = Path(__file__).parent.parent / "catalog"
+
+
+def _attribution(tr: SessionTrace) -> str:
+    """Attribue la sortie écrite : prose lue par l'humain vs brouillon.
+
+    `scribe/metrics.py` agrège le nœud `agent_turn` ENTIER (prose + bloc) et reste
+    agnostique du rôle à dessein — séparer les deux exige de savoir ce qu'est un
+    bloc de métadonnées, connaissance du CURATEUR. Le calcul vit donc ici.
+
+    Mesure : `prose = len(message parsé)`, `delta = len(texte) − prose`. C'est la
+    définition qui a produit la base du 06/08 (69 628 − 14 084 = 55 544) ; le delta
+    inclut fences et espacements, biais présent dans la base aussi.
+    """
+    tours = [n for n in tr.nodes if n.kind == "agent_turn"]
+    if not tours:
+        return (
+            "\n--- attribution de la sortie écrite ---"
+            "\n(aucun tour d'agent dans cette trace : rien à attribuer)"
+        )
+    lignes = ["\n--- attribution de la sortie écrite ---"]
+    total_prose = 0
+    total_delta = 0
+    for i, n in enumerate(tours, start=1):
+        texte = str(n.content.get("text", ""))
+        prose = len(parse_curator_turn(texte).message)
+        delta = max(0, len(texte) - prose)
+        total_prose += prose
+        total_delta += delta
+        lignes.append(f"#{i}  prose {prose} car. · delta {delta} car.")
+    ecrit = total_prose + total_delta
+    part = (100 * total_delta / ecrit) if ecrit else 0.0
+    lignes.append(
+        f"total : prose {total_prose} · delta {total_delta}"
+        f" ({part:.0f} % de la sortie écrite ; base du 06/08 : 79 %)"
+    )
+    fiches = [n for n in tr.nodes if n.kind == "curation_validated"]
+    if fiches:
+        p = Path(str(fiches[0].content.get("path", "")))
+        if p.is_file():
+            taille = len(p.read_text(encoding="utf-8"))
+            if taille:
+                lignes.append(
+                    f"fiche écrite : {taille} car."
+                    f" → delta ÷ fiche = {total_delta / taille:.1f}"
+                    " (base du 06/08 : 3,3 ; cible ≤ 1,5 ; JSON vs YAML, ±20 %)"
+                )
+    return "\n".join(lignes)
 
 
 def _preuve_et_mesures(db: Path) -> str:
@@ -55,6 +104,7 @@ def _preuve_et_mesures(db: Path) -> str:
         lignes.append(f"  hash    : {str(validated[0].meta.get('hash', ''))[:16]}…")
     lignes.append("\n--- mesures ---")
     lignes.append(render_metrics(summarize(tr)))
+    lignes.append(_attribution(tr))
     return "\n".join(lignes)
 
 
