@@ -22,7 +22,7 @@ uv run python -m intreepid.demo_curator <chemin/vers/RoadTrafficAccidentLocation
 Répondre aux questions par numéro et lettre (`1a`, `2b`…), ou en texte libre, ou « je ne
 sais pas ». Valider par `o` au tour de proposition.
 
-**Consigne au gate : ne donner AUCUNE consigne de style.** Le critère 4 est précisément
+**Consigne au gate : ne donner AUCUNE consigne de style.** Le critère 3 est précisément
 que le niveau sorte tout seul.
 
 ## Ce qu'on lit à la fin
@@ -33,7 +33,7 @@ Le driver imprime la preuve greffier, les mesures, puis le bloc neuf :
 --- attribution de la sortie écrite ---
 #1  prose 2130 car. · delta 3120 car.
 ...
-total : prose 12480 · delta 15900 (56 % de la sortie écrite ; base du 06/08 : 79 %)
+total : prose 12480 · delta 15900 (56 % de la sortie écrite ; base du 06/08 : 80 %)
 fiche écrite : 16871 car. → delta ÷ fiche = 0.9 (base du 06/08 : 3,3 ; cible ≤ 1,5 ; JSON vs YAML, ±20 %)
 ```
 
@@ -48,18 +48,17 @@ fiche écrite : 16871 car. → delta ÷ fiche = 0.9 (base du 06/08 : 3,3 ; cible
 | # | Critère | Base du 06/08 | Verdict |
 |---|---|---|---|
 | 1 | delta ÷ fiche écrite **≤ 1,5** | 3,3 | ☐ |
-| 2 | part du delta dans la sortie écrite **≤ 50 %** | 79 % | ☐ |
-| 3 | aucun tour ne dépasse **3 367 car.** de prose — le maximum du 06/08 | 2 130 → 3 367 car. | ☐ |
-| 4 | premier tour aux cinq éléments (objet, ancrage chiffré, enjeu rendu tangible par un mécanisme, options fermées + « je ne sais pas » déclaré valide, penchant avec indice contraire), **zéro consigne de style** | acquis | ☐ |
-| 5 | fiche finale **complète** (36 colonnes), validée | acquis | ☐ |
-| 6 | **zéro** appel `ToolSearch` dans le décompte d'outils | 4 | ☐ |
+| 2 | aucun tour ne dépasse **3 355 car.** de prose — le maximum du 06/08 | 2 118 → 3 355 car. | ☐ |
+| 3 | premier tour aux cinq éléments (objet, ancrage chiffré, enjeu rendu tangible par un mécanisme, options fermées + « je ne sais pas » déclaré valide, penchant avec indice contraire), **zéro consigne de style** | acquis | ☐ |
+| 4 | fiche finale **complète** (36 colonnes), validée | acquis | ☐ |
+| 5 | **zéro** appel `ToolSearch` dans le décompte d'outils | 4 | ☐ |
 
-Les critères 1 et 2 sont des **ratios**, pas des totaux : le changement de seuil ajoute
-des tours, et un total absolu confondrait les deux effets. **Réserve d'unité sur le
+Le critère 1 est un **ratio**, pas un total : le changement de seuil ajoute des tours,
+et un total absolu confondrait les deux effets. **Réserve d'unité sur le
 critère 1** : le delta est du JSON, la fiche écrite du YAML — le ratio est indicatif à
 ±20 % près. L'écart 3,3 → 1,5 est très au-delà de ce bruit.
 
-**Vérifier le critère 5.** Le driver affiche à la validation la ligne
+**Vérifier le critère 4.** Le driver affiche à la validation la ligne
 `✓ fiche écrite : … (sha256 …)` — le chemin exact de la fiche s'y lit. Compter les
 colonnes avec :
 
@@ -67,7 +66,7 @@ colonnes avec :
 uv run python -c "import yaml,sys;d=yaml.safe_load(open(sys.argv[1],encoding='utf-8'));print(len(d['columns']),'colonnes')" catalog/<nom>.fiche.yaml
 ```
 
-**Vérifier le critère 6.** Dans le bloc `--- mesures ---` que le driver imprime en fin
+**Vérifier le critère 5.** Dans le bloc `--- mesures ---` que le driver imprime en fin
 de séance, la section `  Appels d'outil :` contient une ligne de décompte de la forme :
 
 ```
@@ -78,16 +77,22 @@ Si `ToolSearch` n'y apparaît pas, le critère est satisfait.
 
 ## Observés, non exigés
 
-- Le delta par tour cesse-t-il de croître ? (base : 7 764 → 19 242 car.) Une correction
+- **Part du delta dans la sortie écrite** (base : 80 %). Consignée, **pas exigée** : elle
+  vaut `delta ÷ (delta + prose)`, donc son dénominateur bouge avec la prose — que cette
+  slice fait à la fois baisser (la garde) et monter (le seuil ajoute des tours). Le
+  critère 1 mesure la même chose sans ce bruit.
+- Le delta par tour cesse-t-il de croître ? (base : 5 646 → 15 887 car.) Une correction
   tardive peut légitimement produire un gros delta tardif.
 - Nombre de questions (attendu en hausse — conséquence du seuil, jamais une cible).
 - Coût total et latence par tour (base : 1,8033 $ / 734,4 s / 90-102 s par tour).
 - L'agent retrouve-t-il la sévérité **ordinale à l'envers** et l'**absence de comptage de
   victimes** ? Stochastique : un manque se consigne, il ne fait pas échouer le gate.
-- **Arrondi de la base** : la base « 79 % » est en réalité 79,77 % tronquée, alors que
-  l'instrument arrondit — un jeu identique afficherait « 80 % » face à « 79 % ». Sans
-  conséquence pour un verdict qui attend une chute vers ~10 %, mais à savoir avant de
-  lire l'écart.
+- **D'où viennent les bases.** Toutes les valeurs de la colonne « base du 06/08 »
+  sont mesurées **par cet instrument** sur la trace réelle de la séance du 06/08,
+  encore conservée sous `traces/`. Le recap de la brique #8 annonce 14 084 / 55 544
+  / 79 % : c'était un comptage à la main, qui rangeait les délimiteurs de fence du
+  côté prose (12 car. par tour). Les chiffres ci-dessus font foi — ils sont
+  reproductibles.
 
 ## Si ça tourne mal
 

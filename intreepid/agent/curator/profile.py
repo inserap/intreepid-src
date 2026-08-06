@@ -5,8 +5,9 @@
 du tour (Q-0023 — l'agent n'émet que ses colonnes neuves, cf. `draft.py`) ;
 `build_prompt` sérialise l'historique (charte = system_prompt byte-stable) et y
 ajoute l'inventaire du brouillon ; `on_result` écrit l'ACCUMULATEUR et grave le
-nœud `curation_validated` (hash). La fiche reste un dict opaque : Python n'en
-connaît que la clé `columns` et les noms de colonnes.
+nœud `curation_validated` (hash). La fiche reste un dict quasi opaque : Python n'en
+connaît que la clé `columns`, les noms de colonnes, et `dataset` — lu par `_on_result`
+pour nommer le fichier écrit, lecture ANTÉRIEURE à cette slice.
 """
 
 import re

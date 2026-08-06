@@ -33,9 +33,12 @@ def _attribution(tr: SessionTrace) -> str:
     agnostique du rôle à dessein — séparer les deux exige de savoir ce qu'est un
     bloc de métadonnées, connaissance du CURATEUR. Le calcul vit donc ici.
 
-    Mesure : `prose = len(message parsé)`, `delta = len(texte) − prose`. C'est la
-    définition qui a produit la base du 06/08 (69 628 − 14 084 = 55 544) ; le delta
-    inclut fences et espacements, biais présent dans la base aussi.
+    Mesure : `prose = len(message parsé)`, `delta = len(texte) − prose`. Base de
+    comparaison, mesurée PAR CET INSTRUMENT sur la trace réelle du 06/08 :
+    69 628 car. écrits, dont 14 024 de prose et 55 604 de brouillon, soit 80 %.
+    Le comptage à la main du recap annonçait 14 084 / 55 544 / 79 % — il rangeait
+    les délimiteurs de fence du côté prose, 12 car. par tour. C'est la mesure
+    ci-dessus qui fait foi : elle est reproductible.
     """
     tours = [n for n in tr.nodes if n.kind == "agent_turn"]
     if not tours:
@@ -57,7 +60,7 @@ def _attribution(tr: SessionTrace) -> str:
     part = (100 * total_delta / ecrit) if ecrit else 0.0
     lignes.append(
         f"total : prose {total_prose} · delta {total_delta}"
-        f" ({part:.0f} % de la sortie écrite ; base du 06/08 : 79 %)"
+        f" ({part:.0f} % de la sortie écrite ; base du 06/08 : 80 %)"
     )
     fiches = [n for n in tr.nodes if n.kind == "curation_validated"]
     if fiches:

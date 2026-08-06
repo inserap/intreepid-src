@@ -91,16 +91,21 @@ def test_charte_prescrit_le_delta_pas_la_fiche_entiere() -> None:
     assert "ne renvoie jamais une colonne déjà transmise" in aplati
 
 
-def test_charte_interdit_de_redocumenter_en_prose() -> None:
-    """Garde contre le mode d'échec de la brique #8.
+def test_charte_dit_le_principe_de_la_prose_pas_une_liste_dexceptions() -> None:
+    """La prose porte conséquences et risques, jamais la documentation.
 
-    Privé de son brouillon structuré, l'agent déplace sa mémoire dans le seul
-    canal que l'humain lit. La garde vise la DOCUMENTATION DE COLONNES, pas le
-    contenu d'un verrou — une procédure annoncée dans un verrou reste en prose,
-    c'est une recommandation adressée à l'humain.
+    Garde contre le mode d'échec de la brique #8 : privé de son brouillon
+    structuré, l'agent déplace sa mémoire dans le seul canal que l'humain lit.
+    Formulée en PRINCIPE et non en interdiction absolue, parce que deux
+    prescriptions centrales de la charte — le verrou d'ouverture et le résumé
+    des pièges au tour de validation — parlent légitimement de colonnes déjà
+    transmises. Une interdiction absolue les supprimerait ; une liste
+    d'exceptions serait un château de cartes.
     """
     aplati = " ".join(CHARTER.lower().split())
-    assert "ne redocumente jamais une colonne déjà transmise" in aplati
+    assert "jamais la documentation d'une colonne déjà transmise" in aplati
+    # remplacement, pas ajout : l'ancienne interdiction absolue est bien partie
+    assert "ne redocumente jamais" not in aplati
 
 
 def test_charte_distingue_information_et_autorite() -> None:

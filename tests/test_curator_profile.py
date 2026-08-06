@@ -1,5 +1,8 @@
 """Vérifie le profil curateur : isolation P2/P3, terminaison, validation."""
 
+from typing import Any
+
+import pytest
 import yaml
 
 from intreepid.agent.curator.profile import (
@@ -243,3 +246,38 @@ def test_linventaire_ne_contamine_pas_la_reponse_humaine(tmp_path):
     )
     assert reponse == "1a"
     assert "Brouillon" not in str(reponse)
+
+
+@pytest.mark.parametrize(
+    ("cas", "delta", "propose"),
+    [
+        ("tour ordinaire", {"columns": {"alpha": {}}}, False),
+        ("proposition corrigée, non validée", {"columns": {"alpha": {}}}, True),
+        ("garde : accumulateur vide", None, True),
+    ],
+)
+def test_les_trois_retours_de_next_input_ne_portent_que_lhumain(
+    tmp_path: Any, cas: str, delta: dict[str, Any] | None, propose: bool
+) -> None:
+    """Aucun des trois chemins de retour n'ajoute un mot de l'application.
+
+    L'orchestrateur grave la valeur retournée par `next_input` en nœud
+    `human_turn` / `actor: "human"` : tout ce qui n'est pas dit par l'humain y
+    serait une falsification de trace probante. Le test existant ne couvrait
+    qu'un chemin sur trois ; celui de la garde affiche justement un message de
+    l'application juste avant de relire, et rien n'empêcherait quelqu'un d'y
+    joindre un jour l'inventaire du brouillon.
+    """
+    dit = "ce que l'humain a tapé, et rien d'autre"
+    vus: list[str] = []
+    prof = curator_profile(
+        "d.parquet",
+        tmp_path,
+        surface=Surface(writer=vus.append, reader=lambda _p: dit),
+    )
+    next_input = prof.next_input
+    assert next_input is not None
+    retour = next_input(
+        CuratorTurn(message="t", fiche_delta=delta, proposes_completion=propose)
+    )
+    assert retour == dit, f"chemin « {cas} » : retour contaminé"
