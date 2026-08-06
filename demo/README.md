@@ -31,7 +31,7 @@ runbook**.
 | Brique #7b — le profil brut | [`brique-7b-profil-brut.md`](brique-7b-profil-brut.md) | profiler un dataset **sans fiche** (ingestion) via MCP, inférence de type candidat (Q-0015a), code déguisé par faible cardinalité, garde anti-traversée, sans LLM | à jour (`v0.9.0`) |
 | Brique #7c — le curateur conversationnel | [`brique-7c-curateur.md`](brique-7c-curateur.md) | curation maïeutique d'un dataset non-fiché (OFROU 267K lignes, 36 colonnes), dialogue colonne par colonne, types corrigés par l'humain, fiche YAML validée, nœud `curation_validated` dans le greffier | à jour (`v0.10.0`) |
 | Brique #8 — le curateur naturel | [`brique-8-curateur-naturel.md`](brique-8-curateur-naturel.md) | qualité conversationnelle par défaut : forme de tour prescrite (verrou / ancrage chiffré / enjeu / options / « je ne sais pas »), une seule question par tour, brouillon de fiche émis à chaque tour (invisible pour l'humain) | à jour (`v0.12.0`) |
-| Brique #10 — le brouillon incrémental | [`brique-10-brouillon-incremental.md`](brique-10-brouillon-incremental.md) | l'agent n'émet que les colonnes nouvelles ou corrigées, l'application accumule et lui rend l'inventaire ; jugements de périmètre métier ratifiés par l'humain ; attribution prose/delta chiffrée au gate | à venir (`v0.13.0`) |
+| Brique #10 — le brouillon incrémental | [`brique-10-brouillon-incremental.md`](brique-10-brouillon-incremental.md) | l'agent n'émet que les colonnes nouvelles ou corrigées, l'application accumule et lui rend l'inventaire ; jugements de périmètre métier ratifiés par l'humain ; attribution prose/delta chiffrée au gate | **gate échoué** (`v0.13.0`) — mergée comme prérequis |
 
 ## Ajouter une démo
 

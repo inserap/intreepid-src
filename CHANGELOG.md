@@ -8,6 +8,23 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), et le v
 
 (rien pour l'instant)
 
+## [0.13.0] — 2026-08-07
+
+### Ajouté
+- **Le brouillon de fiche vit dans l'application, plus dans l'agent** (`agent/curator/draft.py`) : `merge_delta` fusionne par clé — dernière écriture gagne, `columns` entrée par entrée — et `inventory_line` rend à l'agent l'inventaire de ce qu'on détient pour lui. Deux fonctions **pures**, la valeur d'une colonne restant un objet **opaque** jamais inspecté : Python n'en connaît que la clé `columns`, les noms de colonnes et `dataset`. L'agent n'émet plus que ses **deltas**. L'inventaire transite par `build_prompt` et **jamais** par la valeur retournée par `next_input` — l'orchestrateur grave celle-ci en nœud `human_turn` / `actor: "human"`, et on y inscrirait des mots que l'humain n'a pas dits. **Zéro ligne d'orchestrateur** : la non-régression de l'analyste one-shot est structurelle.
+- **Attribution prose / brouillon** (`demo_curator.py`) : par tour et en totaux de séance, avec le ratio brouillon ÷ fiche écrite. `scribe/metrics.py` **n'est pas touché** et reste agnostique du rôle — séparer une prose d'un bloc de métadonnées est une connaissance du curateur. La définition reproduit celle qui a produit la base de comparaison, sans quoi les chiffres ne seraient pas comparables.
+- `demo/brique-10-brouillon-incremental.md` : runbook du gate humain, critères chiffrés **arrêtés avant l'implémentation**. Quatre statuts périmés du catalogue rattrapés au passage.
+
+### Modifié
+- **Contrat de sortie : `fiche_draft` → `fiche_delta`**, sans repli sur l'ancienne clé. La clé JSON est lue par le **modèle** : elle fait partie du prompt, et laisser « draft » en face de « n'émets que le nouveau » recréerait la contradiction qu'on retire. Un modèle qui ignorerait la consigne doit être exposé par le gate, pas rattrapé silencieusement.
+- **Charte** — la phrase de seuil distingue désormais le manque d'**information** du manque d'**autorité** : un jugement de périmètre — ce qu'une colonne recouvre au sens de l'organisation qui produit la donnée — n'est jamais tranchable depuis un profil, il se **ratifie**. La règle de prose est énoncée en **principe** (les conséquences et les risques, jamais la documentation d'une colonne déjà transmise) et non en interdiction assortie d'exceptions : l'interdiction absolue supprimait le verrou d'ouverture et le résumé des pièges. L'outil MCP est nommé par son **identifiant enregistré**, dans la charte comme dans le prompt initial.
+
+### Notes
+- **Le gate humain a ÉCHOUÉ** (2 critères sur 5), et le mécanisme est **neutre sur le temps** : les 65 s économisées sur la fiche ont été intégralement reprises par le raisonnement (+39 %) et la prose (+7 %). Mergé sur décision d'Alex **non comme livrable mais comme prérequis** de la structure en deux appels à venir — sans le delta, la révision finale ré-émettrait la fiche entière. Le brouillon émis baisse bien de **36 %**.
+- **Deux régressions connues, à réparer dans la slice suivante** : la fiche a perdu ses clés racine de connaissance transversale (12 en `0.10.0`, 3 ici) parce que le § Format de sortie se lit comme une liste fermée — d'où aussi une colonne fantôme pour loger une note transversale ; et la charte porte un **plafond déguisé** (« quelques questions structurantes suffisent ») qui contredit le principe posé au design, le nombre de questions étant une conséquence et jamais un réglage.
+- **Un critère de gate reposait sur une prémisse fausse** : « zéro `ToolSearch` » supposait que le nom nu était la cause. Le renommage a bien supprimé le repli par mots-clés (2 appels par outil → 1), mais les outils MCP sont **différés** dans ce CLI — aucun renommage ne peut les supprimer.
+- MINOR : contrat de sortie modifié, comportement conversationnel modifié, aucune rupture d'API. **188 tests verts**, pyright 0. Mesures, transcript et plan de reprise : `<SPEC>/research/2026-08-06-brique10-gate-materiel.md`.
+
 ## [0.12.0] — 2026-08-06
 
 ### Modifié
