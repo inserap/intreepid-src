@@ -418,6 +418,30 @@ def test_attribution_inconnue_sans_noeud_dedie() -> None:
     assert m.thinking_chars is None
 
 
+def test_appel_apparie_reussi_naffiche_aucune_marque() -> None:
+    """Le SDK omet ``is_error`` sur succès — ``None`` n'est pas « sans résultat ».
+
+    Le SDK Claude ne pose ``is_error`` que sur erreur ; sur un appel apparié qui
+    s'est terminé normalement, ``is_error`` vaut ``None`` (absent du payload).
+    L'appariement est donc confirmé par ``duration_ms`` (non ``None``), non par
+    ``is_error``. Un futur correcteur ne doit pas ré-introduire ce test naïf.
+    """
+    nodes = [
+        _node(1, "tool_call", {"name": "a", "input": {}}, offset_s=0.0),
+        _node(
+            2,
+            "tool_result",
+            {"content": "ok"},  # is_error absent — comportement SDK succès réel
+            parent_id="s#1",
+            offset_s=1.0,
+        ),
+    ]
+    out = render_metrics(summarize(_trace(nodes)))
+    # Apparié + non en erreur = réussi : aucune marque ne doit apparaître
+    assert "[sans résultat]" not in out
+    assert "[erreur]" not in out
+
+
 def test_resultat_sans_appel_connu_ne_casse_pas_l_appariement() -> None:
     """Un tool_result parenté à la racine (appel inconnu) est ignoré sans erreur.
 

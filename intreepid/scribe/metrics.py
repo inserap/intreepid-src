@@ -317,12 +317,15 @@ def render_metrics(m: SessionMetrics) -> str:
     if m.tools:
         lignes.append("  Appels d'outil :")
         for outil in m.tools:
-            if outil.is_error is None:
-                marque = " [sans résultat]"  # non apparié ≠ réussi
-            elif outil.is_error:
+            # Le SDK ne pose ``is_error`` QUE sur erreur : sur un appel apparié
+            # réussi, ``is_error`` est absent (None). Le vrai cas non apparié se
+            # lit sur ``duration_ms is None`` (pas de résultat enregistré).
+            if outil.is_error:
                 marque = " [erreur]"
+            elif outil.duration_ms is None:
+                marque = " [sans résultat]"  # non apparié (session avortée, etc.)
             else:
-                marque = ""
+                marque = ""  # apparié et non en erreur = réussi
             lignes.append(f"    {outil.name} : {_s(outil.duration_ms)}{marque}")
         decompte = ", ".join(f"{nom} × {n}" for nom, n in m.calls_by_tool.items())
         lignes.append(f"  Décompte : {decompte}")
