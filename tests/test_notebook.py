@@ -165,6 +165,46 @@ def test_turn_result_noeud_non_rendu_dans_notebook():
     assert "turn_result" not in out
 
 
+def test_tours_de_conversation_non_rendus_dans_notebook():
+    """Garde : agent_turn / human_turn n'émettent aucun commentaire parasite.
+
+    Le notebook projette une session d'ANALYSE ; les tours d'une conversation
+    n'y ont pas de place. Sans cette garde, chaque tour produit un
+    "<!-- nœud non rendu : kind=agent_turn -->" (défaut latent depuis #7c
+    pour human_turn).
+    """
+    trace = SessionTrace(
+        session_id="s",
+        question="q",
+        model="opus",
+        status="closed",
+        nodes=[
+            TraceNode(
+                id="s#1",
+                session_id="s",
+                seq=1,
+                parent_id="s#0",
+                kind="agent_turn",
+                content={"text": "ma question"},
+                meta={"actor": "agent"},
+            ),
+            TraceNode(
+                id="s#2",
+                session_id="s",
+                seq=2,
+                parent_id="s#0",
+                kind="human_turn",
+                content={"text": "ma réponse"},
+                meta={"actor": "human"},
+            ),
+        ],
+    )
+    out = to_quarto(trace)
+    assert "non rendu" not in out
+    assert "agent_turn" not in out
+    assert "human_turn" not in out
+
+
 def test_render_html_degrades_without_quarto(monkeypatch, tmp_path):
     import intreepid.scribe.notebook as nb
 

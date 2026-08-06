@@ -1,5 +1,7 @@
 """Vérifie la persistance DuckDB du greffier : round-trip, scellement, immuabilité."""
 
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from claude_agent_sdk import (
     AssistantMessage,
@@ -105,7 +107,6 @@ def test_aborted_session_cannot_be_reopened(tmp_path):
 def test_open_crashed_session_cannot_be_reopened(tmp_path):
     """Une session en status='open' (crash non scellé) refuse aussi le ré-ouverture."""
     import json
-    from datetime import datetime, timezone
 
     import duckdb
 
@@ -155,3 +156,31 @@ def test_load_remplit_le_ts_des_noeuds(tmp_path):
     horodates = [n.ts for n in trace.nodes if n.ts is not None]
     assert len(horodates) == len(trace.nodes)  # le store date TOUS les nœuds
     assert horodates == sorted(horodates)  # ordonnés comme les seq
+
+
+def test_ts_relu_est_aware_utc_et_conserve_l_instant(tmp_path):
+    """Le ts relu est aware UTC et vaut l'instant RÉEL de l'écriture.
+
+    Garde anti-régression du défaut d'heure locale : la colonne DuckDB est
+    ``TIMESTAMP`` (sans fuseau), donc insérer un datetime *aware* le faisait
+    convertir vers le fuseau de session puis dépouiller — la base portait de
+    l'heure locale, et les écarts d'une session à cheval sur un changement
+    d'heure étaient faux de ±1 h.
+    """
+    avant = datetime.now(timezone.utc)
+    db = tmp_path / "t.duckdb"
+    with Scribe(db, "s1", "q", "opus") as scribe:
+        scribe.record_nodes([("essai", {"x": 1}, {})])
+    apres = datetime.now(timezone.utc)
+
+    trace = load(db, "s1")
+    horodates = [n.ts for n in trace.nodes]
+    assert all(t is not None for t in horodates)
+    for t in horodates:
+        assert t is not None
+        assert t.tzinfo is not None, "le ts relu doit être timezone-aware"
+        assert t.utcoffset() == timedelta(0), "le ts relu doit être en UTC"
+        # comparaison directe avec des datetime aware : plus aucun monde séparé
+        assert avant <= t <= apres, (
+            f"instant hors de la fenêtre réelle d'écriture : {t.isoformat()}"
+        )

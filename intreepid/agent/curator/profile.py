@@ -83,8 +83,19 @@ def curator_profile(
     catalog_dir = Path(catalog_dir)
 
     def _next_input(result: CuratorTurn) -> str | None:
-        surface.show(result.message)
+        surface.show(result.message or "[tour vide — demande-lui de reformuler]")
         if result.proposes_completion:
+            if result.fiche_draft is None:
+                # La fiche est émise à chaque tour ; si elle manque au tour de
+                # proposition, valider ici perdrait toute la session (on_result
+                # n'aurait rien à écrire). Garde conservée, désormais improbable.
+                # On ne relance PAS tout seul : une relance automatique boucle sans
+                # borne et s'inscrirait dans la trace comme un tour « humain ».
+                surface.show(
+                    "\n[Fiche absente du bloc final — rien ne serait écrit en l'état."
+                    " Demande-lui de renvoyer `fiche_draft` complet, ou Ctrl+C.]"
+                )
+                return surface.ask()
             surface.show("\n[Valider ? 'o' = valider, sinon tape une correction]")
             reply = surface.ask()
             if reply.strip().lower() in _VALIDATE_WORDS:

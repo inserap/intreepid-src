@@ -68,7 +68,13 @@ def to_quarto(trace: SessionTrace) -> str:
         f"statut **{trace.status}**."
     )
     for n in trace.nodes:
-        if n.kind in ("session_root", "tool_result", "turn_result"):
+        if n.kind in (
+            "session_root",
+            "tool_result",
+            "turn_result",
+            "agent_turn",
+            "human_turn",
+        ):
             continue
         if n.kind == "thinking":
             text = " ".join(str(n.content.get("text", "")).split())

@@ -38,13 +38,16 @@ async def run_agent(
     *,
     model: str | None = None,
     trace_to: str | Path | None = None,
+    thinking: bool = False,
 ) -> Any:
     if os.environ.get("ANTHROPIC_API_KEY"):
         raise RuntimeError(
             "ANTHROPIC_API_KEY est définie : elle masque CLAUDE_CODE_OAUTH_TOKEN."
             " Unset-la (dev = abonnement)."
         )
-    options = profile.build_options(model, thinking=trace_to is not None)
+    # Le thinking est DÉCLARÉ par l'appelant, jamais dérivé de la présence du
+    # greffier : sinon mesurer une session change ce qu'elle coûte.
+    options = profile.build_options(model, thinking=thinking)
     with contextlib.ExitStack() as stack:
         scribe: Scribe | None = None
         if trace_to is not None:
@@ -72,7 +75,16 @@ async def run_agent(
                 if profile.on_result is not None:
                     _safe(profile.on_result, scribe, result)
                 return result
-            transcript.append({"assistant": "\n".join(chunks)})
+            tour_agent = "\n".join(chunks)
+            transcript.append({"assistant": tour_agent})
+            if scribe is not None:
+                # Miroir de human_turn : la trace d'une conversation doit porter
+                # ses DEUX voix. Enregistré AVANT next_input, qui bloque sur
+                # l'humain — sinon un Ctrl+C perdrait le tour de l'agent.
+                _safe(
+                    scribe.record_nodes,
+                    [("agent_turn", {"text": tour_agent}, {"actor": "agent"})],
+                )
             assert profile.next_input is not None
             human_reply = profile.next_input(result)
             if scribe is not None and human_reply is not None:

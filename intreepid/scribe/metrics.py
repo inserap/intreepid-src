@@ -3,15 +3,14 @@
 Logique PURE (aucun I/O) : la mesure n'est pas un organe de télémétrie, c'est une
 LECTURE de ce que le greffier capture déjà — nœuds horodatés et paires
 ``tool_call``/``tool_result``. Agnostique du rôle : ne dispatche que sur les kinds
-du socle (``turn_result``, ``tool_call``, ``tool_result``), jamais sur un
-vocabulaire métier. Le coût est donné PAR TOUR : le SDK ne le ventile pas par
-outil, et l'inventer serait faux.
+du socle (``turn_result``, ``agent_turn``, ``thinking``, ``tool_call``,
+``tool_result``), jamais sur un vocabulaire métier. Le coût est donné PAR TOUR : le
+SDK ne le ventile pas par outil, et l'inventer serait faux.
 
-Deux limites à connaître. (1) Les ``ts`` d'une trace relue sont des datetime NAÏFS
-(DuckDB), ceux construits en test sont AWARE : ne jamais comparer les deux mondes,
-les écarts internes à une trace restent justes (piège DST sur une session à cheval
-sur un changement d'heure). (2) Plusieurs ``ToolUseBlock`` d'un même message
-partagent l'instant d'observation : leurs durées valent alors celle du lot.
+Une limite à connaître : plusieurs ``ToolUseBlock`` d'un même message ont des
+horodatages VOISINS — le store date nœud par nœud, jamais par lot — donc leurs
+durées recouvrent le même intervalle réel. ``total_tool_measured_ms`` en donne
+l'UNION, pas la somme.
 
 Interprétation du temps hors API (``non_api_ms``) : c'est la soustraction
 ``duration_ms − duration_api_ms``. L'orchestrateur relance un processus CLI et
@@ -19,6 +18,17 @@ amorce un serveur MCP en sous-processus à CHAQUE tour : ce démarrage de proces
 et cet amorçage tombent entièrement dans ce chiffre. Il N'EST PAS assimilable au
 coût des outils — ``total_tool_measured_ms`` mesure ceux-ci séparément via
 l'appariement des horodatages call/result.
+
+L'attribution de la sortie (``prose_chars``/``thinking_chars``) est donnée en
+CARACTÈRES, pas en tokens : le SDK ne ventile pas ``output_tokens``, et inventer
+une conversion serait faux. Elle répond à « tour d'agent ou thinking ? », pas à
+« combien de tokens exactement ? ». ``prose_chars`` agrège le TOUR D'AGENT ENTIER
+— prose ET bloc de métadonnées : le socle enregistre le texte émis du tour en un
+seul nœud et n'a pas à connaître la structure interne d'un rôle (un curateur y
+ré-émet sa fiche complète à chaque tour, ce qui peut dominer le chiffre).
+``thinking_chars`` est mesuré sur le RÉSUMÉ du raisonnement — seul ce résumé est
+renvoyé par le SDK, alors que la facturation porte sur le raisonnement ENTIER :
+c'est donc un MINORANT, non commensurable en coût avec la sortie de l'agent.
 """
 
 from dataclasses import dataclass
@@ -38,6 +48,8 @@ class TurnMetrics:
     cost_usd: float | None
     input_tokens: int | None
     output_tokens: int | None
+    cache_read_tokens: int | None
+    cache_creation_tokens: int | None
 
 
 @dataclass(frozen=True)
@@ -63,12 +75,16 @@ class SessionMetrics:
     total_non_api_ms: int | None
     total_tool_measured_ms: float | None
     calls_by_tool: dict[str, int]
+    prose_chars: int | None
+    thinking_chars: int | None
     degraded: bool = False
-    totals_partial: bool = False
 
 
 def _int_or_none(value: Any) -> int | None:
-    return value if isinstance(value, int) else None
+    """Coerce en int une valeur numérique ; None sinon. bool exclu à dessein."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    return int(value)
 
 
 def _turn(index: int, node: TraceNode) -> TurnMetrics:
@@ -84,16 +100,39 @@ def _turn(index: int, node: TraceNode) -> TurnMetrics:
         cost_usd=cout if isinstance(cout, (int, float)) else None,
         input_tokens=_int_or_none(usage.get("input_tokens")),
         output_tokens=_int_or_none(usage.get("output_tokens")),
+        cache_read_tokens=_int_or_none(usage.get("cache_read_input_tokens")),
+        cache_creation_tokens=_int_or_none(usage.get("cache_creation_input_tokens")),
     )
 
 
-def _sum_optional(values: list[float | int | None]) -> tuple[float | None, bool]:
-    """Somme les valeurs connues ; renvoie (None, False) si aucune, (somme, partiel)."""
+def _sum_optional(values: list[float | int | None]) -> float | None:
+    """Somme les valeurs connues ; None si aucune ne l'est (inconnu ≠ zéro)."""
     known = [v for v in values if v is not None]
-    if not known:
-        return None, False
-    partial = len(known) < len(values)
-    return sum(known), partial
+    return sum(known) if known else None
+
+
+def _duree_union(intervalles: list[tuple[float, float]]) -> float | None:
+    """Durée couverte par l'union d'intervalles (secondes epoch) en ms.
+
+    Des appels concurrents se recouvrent : leur coût réel en temps est l'union,
+    non la somme. Aucun intervalle connu => None (inconnu, pas zéro).
+    """
+    if not intervalles:
+        return None
+    total = 0.0
+    fin_courante: float | None = None
+    debut_courant = 0.0
+    for debut, fin in sorted(intervalles):
+        if fin_courante is None:
+            debut_courant, fin_courante = debut, fin
+        elif debut <= fin_courante:
+            fin_courante = max(fin_courante, fin)
+        else:
+            total += fin_courante - debut_courant
+            debut_courant, fin_courante = debut, fin
+    if fin_courante is not None:
+        total += fin_courante - debut_courant
+    return total * 1000
 
 
 def summarize(trace: SessionTrace) -> SessionMetrics:
@@ -120,40 +159,64 @@ def summarize(trace: SessionTrace) -> SessionMetrics:
                 cost_usd=cout_meta if isinstance(cout_meta, (int, float)) else None,
                 input_tokens=None,
                 output_tokens=None,
+                cache_read_tokens=None,
+                cache_creation_tokens=None,
             )
         ]
-    resultats = {
-        str(n.meta["tool_use_id"]): n
-        for n in trace.nodes
-        if n.kind == "tool_result" and n.meta.get("tool_use_id") is not None
-    }
+    # Appariement par PARENTÉ : le builder parente chaque tool_result à son
+    # tool_call (repli sur la racine si l'appel est inconnu). Une seule
+    # mécanique d'appariement dans le code, celle de render.py.
+    resultats: dict[str, TraceNode] = {}
+    ids_appels = {n.id for n in trace.nodes if n.kind == "tool_call"}
+    for n in trace.nodes:
+        # `pid` extrait avant le test : `parent_id` est `str | None`, et compter sur
+        # le narrowing par appartenance à un `set[str]` serait un pari sur pyright.
+        pid = n.parent_id
+        if n.kind == "tool_result" and pid is not None and pid in ids_appels:
+            resultats[pid] = n
     tools: list[ToolMetrics] = []
     calls_by_tool: dict[str, int] = {}
+    intervalles: list[tuple[float, float]] = []
     for node in trace.nodes:
         if node.kind != "tool_call":
             continue
         nom = str(node.content.get("name", "?"))
         calls_by_tool[nom] = calls_by_tool.get(nom, 0) + 1
-        # id absent des deux côtés => pas d'appariement (sinon "None" == "None")
-        tid = node.meta.get("tool_use_id")
-        res = resultats.get(str(tid)) if tid is not None else None
+        res = resultats.get(node.id)
         duree: float | None = None
         erreur: bool | None = None
         if res is not None:
             erreur = res.content.get("is_error")
             if node.ts is not None and res.ts is not None:
-                duree = (res.ts - node.ts).total_seconds() * 1000
+                debut = node.ts.timestamp()
+                fin = res.ts.timestamp()
+                duree = (fin - debut) * 1000
+                intervalles.append((debut, fin))
         tools.append(ToolMetrics(name=nom, duration_ms=duree, is_error=erreur))
 
-    # Totaux : None quand aucun composant n'est connu ; partiel si mélangé
-    total_cost, cost_partial = _sum_optional([t.cost_usd for t in turns])
-    total_api, api_partial = _sum_optional([t.duration_api_ms for t in turns])
-    total_non_api, non_api_partial = _sum_optional([t.non_api_ms for t in turns])
-    totals_partial = cost_partial or api_partial or non_api_partial
+    # Totaux : None quand aucun composant n'est connu (inconnu ≠ zéro)
+    total_cost = _sum_optional([t.cost_usd for t in turns])
+    total_api = _sum_optional([t.duration_api_ms for t in turns])
+    total_non_api = _sum_optional([t.non_api_ms for t in turns])
 
-    # Outils mesurés : somme des durées d'appel effectivement appariées
-    tool_durees = [t.duration_ms for t in tools if t.duration_ms is not None]
-    total_tool_measured: float | None = sum(tool_durees) if tool_durees else None
+    # UNION des intervalles, pas somme : plusieurs appels d'un même message ont
+    # des horodatages VOISINS (le store date nœud par nœud, jamais par lot),
+    # donc leurs durées recouvrent le même intervalle réel. Les sommer
+    # multipliait ce temps par le nombre d'appels parallèles.
+    total_tool_measured: float | None = _duree_union(intervalles)
+
+    # Attribution de la SORTIE, en totaux de session : agent_turn est enregistré
+    # APRÈS son turn_result, donc un découpage par tour supposerait un ordre.
+    # None (et non 0) quand le kind est absent : une trace d'analyste one-shot
+    # n'a pas de agent_turn, sa prose n'est pas inconnue à zéro.
+    prose = [
+        len(str(n.content.get("text", "")))
+        for n in trace.nodes
+        if n.kind == "agent_turn"
+    ]
+    pensee = [
+        len(str(n.content.get("text", ""))) for n in trace.nodes if n.kind == "thinking"
+    ]
 
     horodates = [n.ts for n in trace.nodes if n.ts is not None]
     return SessionMetrics(
@@ -163,7 +226,8 @@ def summarize(trace: SessionTrace) -> SessionMetrics:
         tools=tools,
         wall_ms=(
             (max(horodates) - min(horodates)).total_seconds() * 1000
-            if horodates
+            # deux instants minimum : un seul ne fait pas une durée de zéro
+            if len(horodates) >= 2
             else None
         ),
         total_cost_usd=total_cost,
@@ -171,8 +235,9 @@ def summarize(trace: SessionTrace) -> SessionMetrics:
         total_non_api_ms=int(total_non_api) if total_non_api is not None else None,
         total_tool_measured_ms=total_tool_measured,
         calls_by_tool=calls_by_tool,
+        prose_chars=sum(prose) if prose else None,
+        thinking_chars=sum(pensee) if pensee else None,
         degraded=degraded,
-        totals_partial=totals_partial,
     )
 
 
@@ -180,10 +245,10 @@ def _s(ms: float | None) -> str:
     return "?" if ms is None else f"{ms / 1000:.1f}s"
 
 
-def _cout(v: float | None, partial: bool = False, n_inconnus: int = 0) -> str:
+def _cout(v: float | None, n_inconnus: int = 0) -> str:
     if v is None:
         return "?"
-    if partial and n_inconnus:
+    if n_inconnus:
         return f"≥ {v:.4f} USD ({n_inconnus} tour(s) sans coût)"
     return f"{v:.4f} USD"
 
@@ -196,7 +261,7 @@ def render_metrics(m: SessionMetrics) -> str:
     lignes = [
         f"Session {m.session_id} [{m.status}]",
         f"  bout en bout : {_s(m.wall_ms)}"
-        f" · coût total : {_cout(m.total_cost_usd, m.totals_partial, tours_sans_cout)}"
+        f" · coût total : {_cout(m.total_cost_usd, tours_sans_cout)}"
         f" · {'?' if m.degraded else len(m.turns)} tour(s)",
     ]
     if m.degraded:
@@ -206,39 +271,62 @@ def render_metrics(m: SessionMetrics) -> str:
             " durées et détail par tour indisponibles)"
         )
     else:
-        # Ligne de durées : uniquement si au moins un total est connu
-        api_s = _s(m.total_api_ms)
-        non_api_s = _s(m.total_non_api_ms)
         if m.total_api_ms is not None or m.total_non_api_ms is not None:
-            ligne_durees = (
-                f"  dont API : {api_s} · hors API (sur tours mesurés) : {non_api_s}"
+            lignes.append(
+                f"  dont API : {_s(m.total_api_ms)}"
+                f" · hors API (horloge SDK) : {_s(m.total_non_api_ms)}"
             )
-            if m.total_non_api_ms is not None and m.total_tool_measured_ms is not None:
-                reste_ms = m.total_non_api_ms - m.total_tool_measured_ms
-                ligne_durees += (
-                    f"\n    dont outils mesurés : {_s(m.total_tool_measured_ms)}"
-                    f" · démarrage processus/amorçage : {_s(reste_ms)}"
-                )
-            elif m.total_tool_measured_ms is not None:
-                ligne_durees += (
-                    f"\n    dont outils mesurés : {_s(m.total_tool_measured_ms)}"
-                )
-            lignes.append(ligne_durees)
+        if m.total_tool_measured_ms is not None:
+            # PAS soustractible du hors-API : autre horloge (horodatages du
+            # greffier, posés à l'observation du message). Les deux chiffres
+            # cohabitent, ils ne s'expliquent pas l'un par l'autre.
+            lignes.append(
+                f"    outils mesurés (horodatages greffier) :"
+                f" {_s(m.total_tool_measured_ms)} (union des intervalles)"
+            )
         if m.turns:
             lignes.append("  Tours :")
             for t in m.turns:
                 in_tok = t.input_tokens if t.input_tokens is not None else "?"
                 out_tok = t.output_tokens if t.output_tokens is not None else "?"
+                cache_r = t.cache_read_tokens
+                cache_c = t.cache_creation_tokens
+                cache = (
+                    "cache ?"
+                    if cache_r is None and cache_c is None
+                    else f"cache {cache_r if cache_r is not None else '?'} lus"
+                    f" / {cache_c if cache_c is not None else '?'} créés"
+                )
                 lignes.append(
                     f"    #{t.index} {_s(t.duration_ms)}"
                     f" (API {_s(t.duration_api_ms)}, hors API {_s(t.non_api_ms)})"
-                    f" · {t.cost_usd if t.cost_usd is not None else '?'} USD"
-                    f" · in {in_tok} / out {out_tok} tokens"
+                    f" · {_cout(t.cost_usd)}"
+                    f" · in {in_tok} ({cache}) / out {out_tok} tokens"
                 )
+    if m.prose_chars is not None or m.thinking_chars is not None:
+        prose = "?" if m.prose_chars is None else str(m.prose_chars)
+        pensee = "?" if m.thinking_chars is None else str(m.thinking_chars)
+        # Libellé « tour d'agent » et non « prose » : le nœud de tour porte TOUT le
+        # texte émis, bloc de métadonnées compris. Le socle reste agnostique du
+        # rôle — il ne sépare pas la prose d'un brouillon de fiche.
+        lignes.append(
+            f"  Sortie écrite : tour d'agent {prose} car."
+            " (prose + bloc de métadonnées)"
+            f" · thinking {pensee} car. (caractères, pas tokens)"
+        )
     if m.tools:
         lignes.append("  Appels d'outil :")
         for outil in m.tools:
-            marque = " [erreur]" if outil.is_error else ""
+            # Le SDK ne pose ``is_error`` QUE sur erreur : sur un appel apparié
+            # réussi, ``is_error`` est absent (None). Le vrai cas non apparié se
+            # lit sur ``duration_ms is None`` (pas de résultat enregistré).
+            if outil.is_error:
+                marque = " [erreur]"
+            elif outil.duration_ms is None:
+                marque = " [sans résultat]"  # non apparié (session avortée, etc.)
+            else:
+                marque = ""  # apparié et non en erreur = réussi
             lignes.append(f"    {outil.name} : {_s(outil.duration_ms)}{marque}")
-        lignes.append(f"  Décompte : {m.calls_by_tool}")
+        decompte = ", ".join(f"{nom} × {n}" for nom, n in m.calls_by_tool.items())
+        lignes.append(f"  Décompte : {decompte}")
     return "\n".join(lignes)
