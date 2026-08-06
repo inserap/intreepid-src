@@ -2,8 +2,8 @@
 
 import duckdb
 
-from intreepid.demo_curator import _preuve_et_mesures
-from intreepid.scribe.store import Scribe
+from intreepid.demo_curator import _attribution, _preuve_et_mesures
+from intreepid.scribe.store import Scribe, load
 
 
 def test_base_sans_session_le_dit_explicitement(tmp_path):
@@ -41,3 +41,55 @@ def test_session_reelle_rend_preuve_et_mesures(tmp_path):
     assert "tours humains            : 1" in out
     assert "nœuds curation_validated : 1" in out
     assert "mesures" in out
+
+
+_BLOC = (
+    '```json\n{"fiche_delta": {"columns": {"a": {}}},'
+    ' "proposes_completion": false}\n```'
+)
+
+
+def test_attribution_separe_prose_et_delta(tmp_path):
+    """Le critère principal du gate #10 : le brouillon cesse-t-il de dominer ?
+
+    `scribe/metrics.py` agrège le tour ENTIER et ne peut pas répondre — il est
+    agnostique du rôle. Le calcul vit ici et réutilise le parseur du curateur.
+    """
+    db = tmp_path / "attr.duckdb"
+    with Scribe(db, "s1", "q", "opus") as sc:
+        sc.record_nodes(
+            [
+                ("agent_turn", {"text": f"Bonjour.\n{_BLOC}"}, {"actor": "agent"}),
+                ("agent_turn", {"text": f"Suite.\n{_BLOC}"}, {"actor": "agent"}),
+            ]
+        )
+
+    texte = _attribution(load(db, "s1"))
+    assert "#1  prose 8 car. · delta 82 car." in texte
+    assert "#2  prose 6 car. · delta 82 car." in texte
+    assert "total : prose 14 · delta 164 (92 %" in texte
+
+
+def test_attribution_tolere_un_tour_sans_bloc(tmp_path):
+    """Un tour sans bloc JSON compte 0 caractère de delta.
+
+    Repli tolérant de `turn.py` : sans bloc, tout le texte est le message. Le
+    rapport ne doit pas planter pour autant.
+    """
+    db = tmp_path / "nobloc.duckdb"
+    with Scribe(db, "s1", "q", "opus") as sc:
+        sc.record_nodes([("agent_turn", {"text": "que de la prose"}, {})])
+
+    assert "delta 0 car." in _attribution(load(db, "s1"))
+
+
+def test_attribution_sans_tour_dagent_le_dit(tmp_path):
+    """Une trace sans tour d'agent le dit, au lieu d'afficher un 0 % trompeur.
+
+    C'est le cas d'une trace d'analyste one-shot, qui n'a aucun `agent_turn`.
+    """
+    db = tmp_path / "vide.duckdb"
+    with Scribe(db, "s1", "q", "opus") as sc:
+        sc.record_nodes([("human_turn", {"text": "o"}, {"actor": "human"})])
+
+    assert "aucun tour d'agent" in _attribution(load(db, "s1")).lower()
