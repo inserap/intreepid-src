@@ -1,5 +1,7 @@
 """Garde d'agnosticité : la charte du curateur ne câble aucun domaine métier."""
 
+import re
+
 from intreepid.agent.curator.profile import CHARTER
 
 # Vocabulaire du dataset de démonstration + sentinelles vues en fixture, et termes
@@ -60,18 +62,57 @@ def test_charte_prescrit_une_seule_question_par_tour() -> None:
     assert "sur les questions" not in aplati
 
 
-def test_charte_demande_le_brouillon_a_chaque_tour() -> None:
-    """Le brouillon est la mémoire de l'agent : émis à chaque tour, invisible.
+def test_charte_nomme_loutil_par_son_identifiant_complet() -> None:
+    """La charte doit nommer l'outil MCP par son identifiant enregistré.
 
-    Assertions sur le texte APLATI : la charte est enveloppée à 88 colonnes, donc
-    une consigne peut être coupée par un retour à la ligne au milieu — chercher
-    « qu'au tour » dans le texte brut ne prouve rien (il y vaut déjà False
-    aujourd'hui, à cause du saut de ligne après « QU'AU »).
+    4 appels `ToolSearch` parasites au gate du 06/08 : la charte nommait
+    `profile_raw` là où l'outil est enregistré `mcp__intreepid__profile_raw`.
+    `select:profile_raw` échouait, l'agent se rabattait sur une recherche par
+    mots-clés, puis appelait l'outil — deux appels par usage (Q-0019).
+
+    PIÈGE : `mcp__intreepid__profile_raw` CONTIENT `profile_raw`. Une assertion
+    « `profile_raw` not in CHARTER » échouerait TOUJOURS. On compte donc les
+    occurrences NON précédées du préfixe.
+    """
+    assert "mcp__intreepid__profile_raw" in CHARTER
+    nus = re.findall(r"(?<!mcp__intreepid__)profile_raw", CHARTER)
+    assert nus == [], f"{len(nus)} occurrence(s) du nom nu dans la charte"
+
+
+def test_charte_prescrit_le_delta_pas_la_fiche_entiere() -> None:
+    """Le contrat de sortie porte le delta, plus la fiche entière.
+
+    Le brouillon pesait 79 % de la sortie de l'agent (55 544 car. sur 69 628),
+    ré-émis entier à chaque tour.
     """
     aplati = " ".join(CHARTER.lower().split())
-    assert "`fiche_draft` **à chaque tour**" in aplati
-    assert "qu'au tour où tu proposes la validation" not in aplati
-    assert "il vaut `null`" not in aplati
+    assert "fiche_delta" in aplati
+    assert "fiche_draft" not in aplati
+    assert "ne renvoie jamais une colonne déjà transmise" in aplati
+
+
+def test_charte_interdit_de_redocumenter_en_prose() -> None:
+    """Garde contre le mode d'échec de la brique #8.
+
+    Privé de son brouillon structuré, l'agent déplace sa mémoire dans le seul
+    canal que l'humain lit. La garde vise la DOCUMENTATION DE COLONNES, pas le
+    contenu d'un verrou — une procédure annoncée dans un verrou reste en prose,
+    c'est une recommandation adressée à l'humain.
+    """
+    aplati = " ".join(CHARTER.lower().split())
+    assert "ne redocumente jamais une colonne déjà transmise" in aplati
+
+
+def test_charte_distingue_information_et_autorite() -> None:
+    """Un jugement de périmètre métier se ratifie, il ne se tranche pas.
+
+    4 ratifications humaines au lieu de 7 au gate du 06/08 : l'agent avait
+    tranché seul des jugements de périmètre. Le profil ne les tranchera jamais,
+    si riche soit-il — c'est un manque d'autorité, pas un manque d'information.
+    """
+    aplati = " ".join(CHARTER.lower().split())
+    assert "jugement de périmètre" in aplati
+    assert "il se ratifie" in aplati
 
 
 def test_charte_prescrit_le_penchant_et_les_options() -> None:

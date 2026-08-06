@@ -66,8 +66,8 @@ def main() -> None:
     dataset_path = sys.argv[1]
     prompt = (
         f"Curate le dataset non-fiché situé à : {dataset_path}\n"
-        f"Commence par appeler profile_raw sur ce chemin, puis dialogue avec moi "
-        f"jusqu'à une fiche complète."
+        f"Commence par appeler mcp__intreepid__profile_raw sur ce chemin, puis "
+        f"dialogue avec moi jusqu'à une fiche complète."
     )
     profile = curator_profile(dataset_path, CATALOG, surface=Surface())
     traces = Path(__file__).parent.parent / "traces"
