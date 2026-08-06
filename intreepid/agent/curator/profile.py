@@ -85,7 +85,7 @@ def curator_profile(
     def _next_input(result: CuratorTurn) -> str | None:
         surface.show(result.message or "[tour vide — demande-lui de reformuler]")
         if result.proposes_completion:
-            if result.fiche_draft is None:
+            if result.fiche_delta is None:
                 # La fiche est émise à chaque tour ; si elle manque au tour de
                 # proposition, valider ici perdrait toute la session (on_result
                 # n'aurait rien à écrire). Garde conservée, désormais improbable.
@@ -104,16 +104,16 @@ def curator_profile(
         return surface.ask()
 
     def _on_result(scribe: Scribe | None, result: CuratorTurn) -> None:
-        if result.fiche_draft is None:
+        if result.fiche_delta is None:
             surface.show("Aucune fiche à écrire (draft vide).")
             return
-        raw = str(result.fiche_draft.get("dataset") or Path(dataset_path).stem)
+        raw = str(result.fiche_delta.get("dataset") or Path(dataset_path).stem)
         # garde : nom de fichier sûr (pas de slash/point)
         # => pas d'écriture hors catalog_dir
         dataset = re.sub(r"[^0-9A-Za-z_]", "_", Path(raw).stem)
         path = catalog_dir / f"{dataset}.fiche.yaml"
         try:
-            h = write_fiche(result.fiche_draft, path)
+            h = write_fiche(result.fiche_delta, path)
         except Exception as e:  # feedback humain garanti (on_result est best-effort)
             surface.show(f"✗ échec écriture fiche : {e!r}")
             raise
