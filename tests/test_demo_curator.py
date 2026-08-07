@@ -65,9 +65,9 @@ def test_attribution_separe_prose_et_delta(tmp_path):
         )
 
     texte = _attribution(load(db, "s1"))
-    assert "#1  prose 8 car. · delta 82 car." in texte
-    assert "#2  prose 6 car. · delta 82 car." in texte
-    assert "total : prose 14 · delta 164 (92 %" in texte
+    assert "#1  prose 8 car. · questions 0 car. · delta 82 car." in texte
+    assert "#2  prose 6 car. · questions 0 car. · delta 82 car." in texte
+    assert "total : prose 14 · questions 0 · delta 164 (92 %" in texte
 
 
 def test_attribution_tolere_un_tour_sans_bloc(tmp_path):
@@ -93,3 +93,20 @@ def test_attribution_sans_tour_dagent_le_dit(tmp_path):
         sc.record_nodes([("human_turn", {"text": "o"}, {"actor": "human"})])
 
     assert "aucun tour d'agent" in _attribution(load(db, "s1")).lower()
+
+
+def test_attribution_isole_les_questions(tmp_path):
+    """Trois postes : prose, questions, fiche — la compensation doit se voir."""
+    db = tmp_path / "t.duckdb"
+    texte = (
+        "Deux jugements vous reviennent.\n"
+        '```json\n{"fiche_delta": {"columns": {"a": {"sens": "x"}}},'
+        ' "questions": [{"n": 1, "colonne": "a", "constat": "c"}],'
+        ' "proposes_completion": false}\n```'
+    )
+    with Scribe(db, "s1", "q", "opus") as sc:
+        sc.record_nodes([("agent_turn", {"text": texte}, {"actor": "agent"})])
+    tr = load(db, "s1")
+    out = _attribution(tr)
+    assert "questions" in out
+    assert "prose" in out and "delta" in out

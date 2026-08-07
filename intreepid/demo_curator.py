@@ -8,9 +8,12 @@ La trace est conservée dans traces/ (*.duckdb gitignorés) ; relecture :
 Le thinking est demandé explicitement (les nœuds 💭 de la trace en dépendent).
 """
 
+import json
+import statistics
 import sys
 import uuid
 from pathlib import Path
+from typing import Any
 
 import anyio
 import duckdb
@@ -21,24 +24,65 @@ from intreepid.agent.curator.turn import parse_curator_turn
 from intreepid.agent.orchestrator import run_agent
 from intreepid.scribe.metrics import render_metrics, summarize
 from intreepid.scribe.store import load
-from intreepid.scribe.trace import SessionTrace
+from intreepid.scribe.trace import SessionTrace, TraceNode
 
 CATALOG = Path(__file__).parent.parent / "catalog"
 
 
+def _mediane_questions(tours: list[TraceNode]) -> int:
+    """Médiane de la longueur d'une question, en caractères RÉDIGÉS.
+
+    Le nombre de questions est une CONSÉQUENCE et ne se plafonne pas ; c'est
+    leur registre d'écriture qui se borne. Sans cette médiane, sept questions du
+    calibre du 06/08 (2 007 car.) reprendraient tout le gain de la fiche.
+
+    On somme les champs de TEXTE, sans la syntaxe JSON ni les noms de clés :
+    la base de comparaison (2 007 car., médiane du 06/08) a été mesurée sur de
+    la PROSE, et compter le JSON ajouterait ~85 car. par question — un écart
+    d'unité qui ferait comparer deux grandeurs différentes. C'est exactement le
+    défaut du critère 1 de la brique #10, « flatté par son dénominateur ».
+    """
+    tailles: list[int] = []
+    for n in tours:
+        posees = parse_curator_turn(str(n.content.get("text", ""))).questions or []
+        # Filtre INDISPENSABLE : une entrée non-dict lève ici, et l'exception
+        # remonte au `finally` de `main`, qui imprime « (preuve indisponible …) ».
+        # On perdrait la preuve du greffier, les mesures ET l'attribution — donc
+        # les critères 3 et 7 — alors que la fiche est écrite. Avec le garde-fou
+        # D5 (une seule itération), le gate deviendrait non mesurable.
+        tailles += [_longueur_redigee(q) for q in posees if isinstance(q, dict)]
+    return int(statistics.median(tailles)) if tailles else 0
+
+
+def _longueur_redigee(q: dict[str, Any]) -> int:
+    """Caractères de texte d'une question : champs et libellés d'options."""
+    total = sum(len(v) for v in q.values() if isinstance(v, str))
+    options = q.get("options")
+    if isinstance(options, dict):
+        total += sum(len(str(v)) for v in options.values())
+    return total
+
+
 def _attribution(tr: SessionTrace) -> str:
-    """Attribue la sortie écrite : prose lue par l'humain vs brouillon.
+    """Attribue la sortie écrite en TROIS postes : prose, questions, fiche.
 
     `scribe/metrics.py` agrège le nœud `agent_turn` ENTIER (prose + bloc) et reste
     agnostique du rôle à dessein — séparer les deux exige de savoir ce qu'est un
     bloc de métadonnées, connaissance du CURATEUR. Le calcul vit donc ici.
 
-    Mesure : `prose = len(message parsé)`, `delta = len(texte) − prose`. Base de
-    comparaison, mesurée PAR CET INSTRUMENT sur la trace réelle du 06/08 :
-    69 628 car. écrits, dont 14 024 de prose et 55 604 de brouillon, soit 80 %.
-    Le comptage à la main du recap annonçait 14 084 / 55 544 / 79 % — il rangeait
-    les délimiteurs de fence du côté prose, 12 car. par tour. C'est la mesure
-    ci-dessus qui fait foi : elle est reproductible.
+    Mesure : `prose = len(message parsé)`, `questions = len(json.dumps(…))`,
+    `delta = len(texte) − prose − questions`. Base de comparaison, mesurée PAR
+    CET INSTRUMENT sur la trace réelle du 06/08 : 69 628 car. écrits, dont
+    14 024 de prose et 55 604 de brouillon, soit 80 %. Le comptage à la main du
+    recap annonçait 14 084 / 55 544 / 79 % — il rangeait les délimiteurs de
+    fence du côté prose, 12 car. par tour. C'est la mesure ci-dessus qui fait
+    foi : elle est reproductible.
+
+    BIAIS ASSUMÉ, et il va dans le sens CONSERVATEUR : les questions sont
+    comptées sur `json.dumps` compact, donc l'indentation que le modèle aurait
+    écrite retombe du côté du delta. Le poste « hors questions » du gate est
+    ainsi légèrement SURESTIMÉ. On l'énonce plutôt que de le corriger : une
+    mesure ne doit jamais flatter le résultat qu'elle sert à juger.
     """
     tours = [n for n in tr.nodes if n.kind == "agent_turn"]
     if not tours:
@@ -48,20 +92,34 @@ def _attribution(tr: SessionTrace) -> str:
         )
     lignes = ["\n--- attribution de la sortie écrite ---"]
     total_prose = 0
+    total_questions = 0
     total_delta = 0
     for i, n in enumerate(tours, start=1):
         texte = str(n.content.get("text", ""))
-        prose = len(parse_curator_turn(texte).message)
-        delta = max(0, len(texte) - prose)
+        tour = parse_curator_turn(texte)
+        prose = len(tour.message)
+        posees = json.dumps(tour.questions or [], ensure_ascii=False)
+        questions = len(posees) if tour.questions else 0
+        delta = max(0, len(texte) - prose - questions)
         total_prose += prose
+        total_questions += questions
         total_delta += delta
-        lignes.append(f"#{i}  prose {prose} car. · delta {delta} car.")
-    ecrit = total_prose + total_delta
+        lignes.append(
+            f"#{i}  prose {prose} car. · questions {questions} car."
+            f" · delta {delta} car."
+        )
+    ecrit = total_prose + total_questions + total_delta
     part = (100 * total_delta / ecrit) if ecrit else 0.0
     lignes.append(
-        f"total : prose {total_prose} · delta {total_delta}"
+        f"total : prose {total_prose} · questions {total_questions}"
+        f" · delta {total_delta}"
         f" ({part:.0f} % de la sortie écrite ; base du 06/08 : 80 %)"
     )
+    if total_questions:
+        lignes.append(
+            f"  médiane par question : {_mediane_questions(tours)} car."
+            " (base du 06/08 : 2 007 ; cible ≤ 800)"
+        )
     fiches = [n for n in tr.nodes if n.kind == "curation_validated"]
     if fiches:
         p = Path(str(fiches[0].content.get("path", "")))
