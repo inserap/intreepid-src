@@ -59,8 +59,8 @@ def test_merge_ne_mute_pas_ses_arguments() -> None:
 
 
 def test_inventaire_vide_le_dit() -> None:
-    assert "aucune colonne" in inventory_line(None).lower()
-    assert "aucune colonne" in inventory_line({}).lower()
+    assert "aucune entrée" in inventory_line(None).lower()
+    assert "aucune entrée" in inventory_line({}).lower()
 
 
 def test_inventaire_compte_et_trie_les_noms() -> None:
