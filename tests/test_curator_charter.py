@@ -49,17 +49,31 @@ def test_charte_ne_demande_plus_de_memoire_en_prose() -> None:
         assert interdit not in minuscules, f"rustine de mémoire en prose : {interdit}"
 
 
-def test_charte_prescrit_une_seule_question_par_tour() -> None:
-    """Le transcript de référence pose UNE question par tour (7 pour 36 colonnes)."""
-    minuscules = CHARTER.lower()
-    aplati = " ".join(minuscules.split())
-    assert "une seule question" in minuscules
-    assert "1 à 3 questions" not in minuscules
-    # le premier tour est celui que le gate juge : aucun pluriel ne doit y
-    # laisser lire une autorisation de grouper les questions. Sur le texte
-    # APLATI : un ré-enveloppement à 88 colonnes couperait la chaîne en deux
-    # et ferait passer la garde en silence.
-    assert "sur les questions" not in aplati
+def test_charte_demande_toutes_les_questions_en_un_tour() -> None:
+    """Le verrou structurel de la brique #11, retiré.
+
+    `c37cb70` (06/08 00 h 10) avait remplacé « Pose ensuite 1 à 3 questions »
+    par « une seule question » : c'est pour cela qu'il fallait 5 tours pour 4
+    questions. Le transcript de référence du 04/08 — « 3 questions
+    prioritaires » — tournait sur la charte d'AVANT.
+    """
+    aplati = " ".join(CHARTER.lower().split())
+    assert "une seule question" not in aplati
+    assert "une question à la fois" not in aplati
+    assert "toutes les questions que tu ne peux pas trancher" in aplati
+
+
+def test_charte_ne_porte_aucun_plafond_de_questions() -> None:
+    """Il n'existe pas de nombre de questions correct (Q-0025).
+
+    Cent questions sont légitimes si cent jugements exigent une autorité que le
+    profil n'a pas. Le garde-fou contre le comportement robotique de v0.10.0
+    reste « jamais une passe colonne par colonne » — un critère, pas un volume.
+    """
+    aplati = " ".join(CHARTER.lower().split())
+    assert "questions structurantes suffisent" not in aplati
+    assert "1 à 3 questions" not in aplati
+    assert "passe colonne par colonne" in aplati
 
 
 def test_charte_nomme_loutil_par_son_identifiant_complet() -> None:
@@ -120,16 +134,72 @@ def test_charte_distingue_information_et_autorite() -> None:
     assert "il se ratifie" in aplati
 
 
-def test_charte_prescrit_le_penchant_et_les_options() -> None:
-    """Deux des cinq éléments de la question, non couverts jusqu'ici.
+def test_charte_prescrit_les_options_et_plus_le_penchant_obligatoire() -> None:
+    """Trois prescriptions ajoutées le 06/08, retirées ici.
 
-    SHOULD différé de la revue finale de #8 : le test de forme ne tenait que par
-    le mot « ancrage ». Ces deux marqueurs sont ce qui distingue une question
-    ratifiable d'une devinette.
+    Le penchant systématique, l'indice contraire et la signalisation
+    d'irréversibilité codifiaient un comportement que l'agent avait DÉJÀ
+    spontanément au 04/08 — et la codification a triplé le volume d'une
+    question (634 → 2 007 car. de médiane) sans rien ajouter au fond.
+    """
+    aplati = " ".join(CHARTER.lower().split())
+    assert "options" in aplati
+    assert "ton penchant" not in aplati
+    assert "dans l'autre sens" not in aplati
+    assert "irréversible" not in aplati
+
+
+def test_charte_prescrit_le_schema_et_la_regle_dechappement() -> None:
+    """Sans schéma, « fiche complète » et « trop longue » n'ont pas de sens.
+
+    Mesuré le 07/08 sur quatre runs du MÊME prompt : 14 clés de colonne
+    distinctes, 2 seulement communes aux quatre. La dérive n'est pas un
+    glissement entre slices, c'est un tirage à chaque run.
+    """
+    aplati = " ".join(CHARTER.lower().split())
+    for cle in (
+        "grain",
+        "perimetre",
+        "referentiels",
+        "pieges_transversaux",
+        "points_non_tranches",
+    ):
+        assert cle in aplati, f"clé racine absente du schéma : {cle}"
+    # `sens` et `type` figurent DÉJÀ dans la charte d'avant : les asserter seuls ne
+    # discrimine rien. C'est la ligne du schéma qui doit être présente.
+    assert "`sens`, `type`, `pieges`" in aplati
+    # la règle d'échappement : c'est elle qui a manqué en #10, d'où la colonne
+    # fantôme créée pour loger une note transversale
+    assert "n'invente jamais une entrée de colonne" in aplati
+    # la COUVERTURE : sans elle, la charte interdirait le regroupement des
+    # libellés que le schéma prescrit, et les critères 2 et 6 s'excluraient
+    assert "couverture, et non comptage" in aplati
+    assert "une fiche partielle" not in aplati or "nommée dans une entrée" in aplati
+
+
+def test_charte_donne_une_echelle_en_caracteres_pas_en_phrases() -> None:
+    """L'unité « phrase » ne contient rien : 634 car. au 04/08, 2 007 au 06/08.
+
+    Les deux respectaient « quatre à six phrases ». L'échelle se prescrit dans
+    l'unité qu'on mesure, et qui se convertit en secondes (76 tokens/s).
+    """
+    aplati = " ".join(CHARTER.lower().split())
+    assert "quatre à six phrases" not in aplati
+    # L'échelle de la QUESTION, pas n'importe quelle mention de caractères : le
+    # § Schéma en porte une autre (~150 / ~400, pour les entrées de fiche), donc
+    # un simple « caractères » in … resterait vert si cette règle-ci disparaissait.
+    assert "~600 caractères" in aplati
+
+
+def test_gabarit_porte_plusieurs_questions() -> None:
+    """Le gabarit est l'échelle réelle : un modèle imite l'exemple.
+
+    À 918 caractères, l'ancien gabarit de question enseignait 45 % de plus que
+    le gold-standard validé (634). Le nouveau en porte deux, de tailles
+    différentes, pour montrer qu'une question simple est plus brève.
     """
     minuscules = CHARTER.lower()
-    for marqueur in ("penchant", "options"):
-        assert marqueur in minuscules, f"la charte ne prescrit plus : {marqueur}"
+    assert "question 1" in minuscules and "question 2" in minuscules
 
 
 def test_gabarit_conserve_ses_noms_factices() -> None:
