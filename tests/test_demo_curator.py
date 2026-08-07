@@ -1,5 +1,7 @@
 """Vérifie que la fin de séance du curateur ne se tait jamais (gate humain)."""
 
+import json
+
 import duckdb
 
 from intreepid.demo_curator import _attribution, _preuve_et_mesures
@@ -110,3 +112,47 @@ def test_attribution_isole_les_questions(tmp_path):
     out = _attribution(tr)
     assert "questions" in out
     assert "prose" in out and "delta" in out
+    # Les CHIFFRES, pas seulement la présence des mots : le critère 3 du gate
+    # (médiane ≤ 800 car.) repose entièrement sur cette arithmétique, et le
+    # garde-fou D5 n'autorise qu'une séance. 42 = len(json.dumps) de la
+    # question ; 2 = ses caractères rédigés (`a` + `c`, le `n` entier exclu).
+    assert "questions 42 car." in out
+    assert "médiane par question : 2 car." in out
+
+
+def test_mediane_est_bien_une_mediane_et_ignore_la_syntaxe_json(tmp_path):
+    """TROIS questions très inégales : aucune autre statistique ne donne 10.
+
+    Deux valeurs ne suffiraient pas — à 2 et 182, médiane ET moyenne valent
+    92, et une confusion des deux passerait inaperçue. C'est exactement
+    l'erreur qui fausserait le critère 3 du gate : sur sept questions dont une
+    énorme, moyenne et médiane divergent franchement. Ici, caractères rédigés
+    2 · 10 · 182 → médiane 10, moyenne 64, maximum 182, somme 194.
+    """
+    db = tmp_path / "med.duckdb"
+    texte = (
+        "Trois questions.\n```json\n"
+        + json.dumps(
+            {
+                "questions": [
+                    {"n": 1, "colonne": "a", "constat": "c"},
+                    {"n": 2, "colonne": "bb", "constat": "d" * 8},
+                    {
+                        "n": 3,
+                        "colonne": "bb",
+                        "constat": "x" * 100,
+                        "enjeu": "y" * 50,
+                        "options": {"a": "z" * 30},
+                    },
+                ],
+                "proposes_completion": False,
+            },
+            ensure_ascii=False,
+        )
+        + "\n```"
+    )
+    with Scribe(db, "s1", "q", "opus") as sc:
+        sc.record_nodes([("agent_turn", {"text": texte}, {"actor": "agent"})])
+
+    out = _attribution(load(db, "s1"))
+    assert "médiane par question : 10 car." in out, out

@@ -439,6 +439,46 @@ def test_questions_non_dict_ne_perdent_pas_la_seance(tmp_path):
     assert next_input(turn) == "libre"
 
 
+def test_bloc_illisible_le_dit_a_lhumain(tmp_path):
+    """Le runbook promet que l'application parle ; sans ceci elle se taisait.
+
+    Un bloc non-JSON fait replier `parse_curator_turn` : ni colonnes ni
+    questions n'arrivent, et la prose porte encore sa fence. L'humain voyait
+    « Voici mes questions. » suivi du JSON cassé, puis un prompt nu — aucune
+    question servie et rien pour le lui dire, en pleine séance payée.
+    """
+    vus: list[str] = []
+    prof = curator_profile(
+        "d.parquet",
+        tmp_path,
+        surface=Surface(writer=vus.append, reader=_reader_scripte(["reemets"])),
+    )
+    next_input = prof.next_input
+    assert next_input is not None
+    casse = CuratorTurn(
+        message='Voici mes questions.\n```json\n{"questions": [{"n": 1}\n```',
+        fiche_delta=None,
+        proposes_completion=False,
+    )
+    assert next_input(casse) == "reemets"
+    assert any("Bloc de métadonnées illisible" in t for t in vus)
+    assert any("tour est perdu" in t for t in vus)
+
+
+def test_un_tour_normal_ne_crie_pas_au_bloc_illisible(tmp_path):
+    """Discriminance : la garde ne doit pas se déclencher sur un tour sain."""
+    vus: list[str] = []
+    prof = curator_profile(
+        "d.parquet",
+        tmp_path,
+        surface=Surface(writer=vus.append, reader=_reader_scripte(["1a"])),
+    )
+    next_input = prof.next_input
+    assert next_input is not None
+    next_input(_tour_avec_questions(1))
+    assert not any("illisible" in t for t in vus)
+
+
 def test_on_result_ecrit_les_deux_artefacts_avec_les_reponses(tmp_path):
     prof = curator_profile(
         "d.parquet",

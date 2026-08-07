@@ -160,6 +160,17 @@ def curator_profile(
         brouillon = merge_delta(brouillon, result.fiche_delta)
         questions = merge_questions(questions, result.questions)
         surface.show(result.message or "[tour vide — demande-lui de reformuler]")
+        if "```" in result.message:
+            # `parse_curator_turn` a REPLIÉ : le bloc n'était pas du JSON lisible,
+            # donc ni colonnes ni questions ne sont arrivées, et la prose porte
+            # encore sa fence — c'est la signature exacte du repli, un bloc lu
+            # normalement étant retiré du message. Sans ce message, l'humain voit
+            # du JSON cassé et un prompt nu, sans savoir que le tour est perdu ;
+            # or le runbook lui promet que l'application le dit (design § 9).
+            surface.show(
+                "\n[Bloc de métadonnées illisible : ni colonnes ni questions"
+                " reçues. Ce tour est perdu — demande-lui de le réémettre.]"
+            )
         if result.proposes_completion:
             if not brouillon.get("columns"):
                 # La garde porte sur l'ACCUMULATEUR, plus sur le delta du tour :
