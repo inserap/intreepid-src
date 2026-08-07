@@ -153,3 +153,41 @@ def test_ancienne_cle_fiche_draft_est_ignoree() -> None:
         "```\n"
     )
     assert parse_curator_turn(text).fiche_delta is None
+
+
+def test_questions_lues_dans_le_bloc() -> None:
+    text = (
+        "Deux jugements vous reviennent.\n"
+        '```json\n{"fiche_delta": {"columns": {"a": {}}},'
+        ' "questions": [{"n": 1, "colonne": "a", "constat": "c"}],'
+        ' "proposes_completion": false}\n```'
+    )
+    turn = parse_curator_turn(text)
+    assert turn.questions is not None
+    assert turn.questions[0]["n"] == 1
+    assert turn.message == "Deux jugements vous reviennent."
+
+
+def test_questions_absentes_valent_none() -> None:
+    text = '```json\n{"fiche_delta": {"columns": {"a": {}}}}\n```'
+    assert parse_curator_turn(text).questions is None
+
+
+def test_questions_non_liste_ou_vide_valent_none() -> None:
+    for charge in ('"questions": {"n": 1}', '"questions": []', '"questions": null'):
+        text = "prose\n```json\n{" + charge + "}\n```"
+        assert parse_curator_turn(text).questions is None, charge
+
+
+def test_bloc_illisible_perd_les_questions_mais_garde_la_prose() -> None:
+    """Mode de panne assumé : on ne se tait pas, la prose survit.
+
+    Le bloc portant désormais les colonnes ET les questions, un bloc malformé
+    fait perdre les deux. Le repli tolérant conserve le texte, et c'est
+    l'application qui dira que le tour est perdu.
+    """
+    text = "Voici mes questions.\n```json\n{ceci n'est pas du json\n```"
+    turn = parse_curator_turn(text)
+    assert turn.questions is None
+    assert turn.fiche_delta is None
+    assert "Voici mes questions." in turn.message
