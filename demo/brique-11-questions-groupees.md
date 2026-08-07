@@ -35,6 +35,7 @@ précisément que le niveau et le schéma sortent tout seuls.
 | 7 | écrit **hors questions** ÷ 36 colonnes **≤ 700 car. pour 2 tours d'agent, + 150 par tour supplémentaire que TU provoques** | 1 571 | ☐ |
 | 8 | nombre de questions | 4 | **rapporté, non plafonné** |
 | 9 | temps de génération / temps humain | 462,7 s / 495,1 s | **rapportés** |
+| 10 | réponses que tu as dû **corriger** au tour suivant, et l'écho t'a-t-il servi | — (le verrou existait) | **rapporté, non bloquant** |
 
 Le critère 7 est la **borne globale** : c'est la seule qui ne se compense pas. Il exclut les
 questions parce que leur registre est déjà borné par le critère 3 — borner leur nombre serait
@@ -61,6 +62,20 @@ basse avec un total élevé n'est pas un succès.
 **Critère 1 — appels LLM.** Le bloc `--- mesures ---` imprimé en fin de séance donne
 `… · N tour(s)`. Chaque tour est un appel. Attendu : 2, plus un par tour que vous avez
 provoqué (contestation, précision, demande d'éclaircissement).
+
+> **Divergence connue, à OBSERVER et non à corriger en séance.** Le design fait inscrire les
+> questions restées sans réponse en `points_non_tranches` au tour de validation ; la charte, elle,
+> dit à l'agent de **les reposer au tour suivant** si elles comptent encore. Si tu utilises la
+> ligne vide pour sauter des questions, un tour de plus peut donc apparaître — et ce n'est ni un
+> tour que TU as provoqué, ni un échec du mécanisme. **Noter le cas s'il se produit** : c'est
+> l'arbitrage charte/design qui se tranchera après, sur une observation réelle plutôt que sur le
+> papier.
+>
+> **Comment le compter, pour ne pas hésiter en séance** : il apparaît au critère 1, qui est
+> l'endroit où l'anomalie doit se voir — et il compte dans la tolérance du critère 7, au même
+> titre qu'un tour que tu aurais provoqué. Raison : le critère 7 borne ce qui est écrit **par
+> tour**, pas le nombre de tours ; l'y ignorer punirait deux fois le même événement, dont une
+> fois sur un poste que tu n'as pas causé.
 
 **Critères 2, 4, 5, 6 — la fiche.** Le driver affiche à la validation
 `✓ fiche écrite : … (sha256 …)`. Sur ce chemin :
@@ -199,6 +214,24 @@ sur `traces/curator-785a2ccd.duckdb` (la séance du 06/08) : elle rend `ecrit 64
 **Critère 9 — les deux temps, séparément.** `bout en bout`, `dont API` et `hors API` sont dans
 le bloc `--- mesures ---`. Le **temps humain** est `bout en bout − API − hors API` : 495,1 s au
 06/08, et il n'est pas censé baisser.
+
+**Critère 10 — le seul risque du design qu'aucun chiffre n'attrape.** Cette slice **supprime**
+le verrou entre deux questions : jusqu'ici, l'agent reformulait ta réponse au tour suivant et tu
+pouvais le reprendre. Désormais sept questions défilent sans qu'aucun modèle ne tourne, et la
+seule garde est l'écho du libellé de l'option choisie. Le design le pose en risque n° 3 et nomme
+l'observable — *« l'humain a-t-il eu besoin de corriger après coup ? »* — mais aucun des neuf
+critères ne le demande, et le critère 1 ne peut pas y répondre : un tour d'éclaircissement et un
+tour de rattrapage donnent le **même** chiffre et des verdicts opposés.
+
+Donc, à la main, en fin de séance, deux notes :
+
+- combien de réponses tu as dû **corriger** au tour suivant (0 = le mécanisme tient) ;
+- si l'**écho** `→ (a) libellé` t'a effectivement servi, ou si tu ne l'as pas regardé.
+
+Rapporté au recap, jamais compté comme un échec : c'est une observation de première séance, pas
+un seuil. Sans elle, la question du design reste sans réponse quel que soit le résultat du gate
+— et c'est exactement ce qui a fait échouer la brique #8, dont le gate ne regardait pas
+l'artefact où son risque principal se manifestait.
 
 ## Ce que ce gate ne prouvera PAS
 
