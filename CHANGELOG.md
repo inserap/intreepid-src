@@ -8,6 +8,48 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), et le v
 
 (rien pour l'instant)
 
+## [0.14.0] — 2026-08-08
+
+> **Gate humain ÉCHOUÉ (3 critères sur 7)** — version publiée comme **prérequis**, non comme livrable achevé. Le mécanisme central passe ; la calibration de la fiche échoue. Détail en fin de section.
+
+### Ajouté
+- **L'agent pose TOUTES ses questions en un tour, l'application les sert une par une** (`agent/curator/questions.py`, **NEW**) : `merge_questions` accumule et fusionne **par numéro** (dernière écriture gagne, même sémantique que `columns`), `render_question` assemble le texte affiché, `attach_answers` y attache la réponse humaine. Trois fonctions **pures**. **Aucun appel LLM entre deux questions** : c'est là qu'est le gain — **5 appels LLM → 2**, mesuré. La boucle multi-tours n'a pas bougé et `agent/orchestrator.py` est à **zéro ligne modifiée** ; ce sont la charte et ces trois fonctions qui font qu'un seul tour suffit.
+- **Second artefact, `<dataset>.questions.yaml`** (`agent/curator/fiche_writer.py::write_questions`) : le dialogue de ratification — questions, options, réponses humaines. Il n'est **jamais relu par un LLM**, contrairement à la fiche qui l'est verbatim à chaque analyse : y verser le dialogue ferait payer une conversation à un lecteur qui n'en a que faire. Sa valeur est la provenance (P4) et, plus tard, l'observation des redites d'une couche à l'autre chez un même producteur (Q-0025). **Il n'entre jamais dans le hash de la fiche** — vérifié en rehashant la fiche du gate du 06/08, identique au caractère près.
+- **Schéma de fiche prescrit dans la CHARTE, jamais en Python** (`agent/curator/charter.md`) : 8 clés racine (`dataset`, `titre`, `grain`, `perimetre`, `referentiels`, `pieges_transversaux`, `points_non_tranches`, `columns`) et un vocabulaire de colonne **fixe** (`sens`, `type`, `pieges`). Motif mesuré : quatre exécutions du **même** prompt avaient produit **quatre vocabulaires distincts, 14 clés en tout, 2 seulement communes aux quatre** — une dérive par exécution, pas un glissement entre slices. Deux règles l'accompagnent : la **règle d'échappement** (un fait qui ne porte pas sur UNE colonne va dans `pieges_transversaux` — son absence avait produit la colonne fantôme de la 0.13.0) et la règle de **COUVERTURE et non de comptage** (une colonne est couverte par sa propre entrée ou **nommée** dans une entrée groupée ; une rubrique vide s'écrit `[]`, elle ne s'omet jamais). La fiche reste un dict **opaque** côté Python : aucune validation de schéma.
+- **Interruption de la collecte** (`agent/curator/profile.py`) : une **ligne vide** demande l'envoi de ce qui est déjà collecté, avec confirmation. Vocabulaire **dédié** (`_SEND_WORDS`), distinct de celui qui valide une fiche : confirmer un envoi n'est pas valider une fiche, et fusionner les deux listes ferait qu'un mot ajouté à l'une changerait le sens de l'autre. Plus un **écho** du libellé de l'option choisie — le verrou intermédiaire disparaissant, c'est la garde minimale contre la faute de frappe.
+- **Attribution de la sortie en TROIS postes** (`demo_curator.py`) : prose, **questions**, fiche, plus une **médiane par question** comptée en caractères rédigés. Sans le poste « questions », on ne saurait pas si la densité gagnée sur la fiche a simplement migré vers elles — le scénario le plus probable, et la leçon des trois compensations successives appliquée à l'instrument **avant** la séance.
+- **Le greffier capture le modèle RÉSOLU, plus seulement l'alias demandé** (`scribe/trace.py`, `scribe/metrics.py`) : les clés de `ResultMessage.model_usage` sont rangées dans le nœud `turn_result` et rendues par `render_metrics`. La trace n'enregistrait que `"opus"` — or ce projet compare des séances à la seconde près, et rien ne permettait de vérifier qu'elles avaient tourné sur la même version : toutes les bases de comparaison reposaient sur une hypothèse invérifiable. Union sur tous les tours (un modèle peut changer en cours de session), liste vide = inconnu et jamais « aucun ». Socle **agnostique du rôle** et append-only, aucun DDL.
+- **Une garde qui manquait** : un bloc de métadonnées illisible fait désormais dire à l'application que **le tour est perdu**. Le design et le runbook le promettaient tous deux ; mesuré, l'application se taisait — l'humain voyait sa prose, puis du JSON brut cassé, puis un prompt nu, sans savoir qu'aucune question ne lui serait servie.
+- `demo/brique-11-questions-groupees.md` (**NEW**) : runbook du gate, **dix critères arrêtés avant l'implémentation**, chacun avec la commande qui le mesure.
+
+### Modifié
+- **La charte perd son verrou et son plafond déguisé.** « Pose ensuite **une seule question** » et « une question à la fois » sont retirés — c'est cette prescription, introduite le 06/08 à 00 h 10, qui coûtait 5 appels pour 4 questions. « Quelques questions structurantes suffisent » part aussi : le nombre de questions est une **conséquence** du nombre de jugements qui exigent une autorité que le profil n'a pas, jamais un réglage. Le vrai garde-fou — « ne fais JAMAIS une passe colonne par colonne » — **reste**. Trois rubriques obligatoires ajoutées le 06/08 (penchant systématique, indice contraire, signalisation d'irréversibilité) sont retirées : elles codifiaient un comportement déjà spontané et avaient **triplé** la longueur d'une question (634 → 2 007 car.) sans rien ajouter au fond.
+- **L'échelle d'une question se prescrit en CARACTÈRES, plus en phrases.** « Quatre à six phrases » ne contenait rien : deux séances la respectaient, l'une à 634 caractères, l'autre à 2 007. L'unité doit être celle qu'on mesure — et qui se convertit en secondes, le débit étant une constante mesurée (76,16 tok/s, écart-type 0,7 %).
+- **Le gabarit porte deux questions** au lieu d'une, de tailles délibérément différentes, et pèse **1 726 caractères contre 1 887**. Un modèle imite l'exemple plus qu'il n'obéit à la consigne : c'est le gabarit qui enseigne l'échelle réelle.
+- `agent/curator/draft.py` — **libellé seulement**, mécanisme intouché : l'inventaire rendu à l'agent compte des « entrée(s) » et non des « colonne(s) ». Après cette version l'agent groupe, et il lirait « 17 colonnes » pour un jeu de 36 — le mécanisme exact de la régression de la 0.13.0, une phrase qui se lit autrement qu'on ne l'entend.
+
+### Notes — le gate humain, en détail
+Séance réelle sur l'OFROU brut (267 761 lignes, 36 colonnes), **7 questions, 2 tours**, fiche validée (`d2eb24c3c463`).
+
+| # | Critère | Base 06/08 | Mesuré | |
+|---|---|---|---|---|
+| 1 | 2 appels LLM + tours provoqués | 5 | **2** | ✅ |
+| 2 | fiche ÷ 36 colonnes ≤ 300 car. | 804 | **427** | ❌ |
+| 3 | médiane par question ≤ 800 car. | 2 007 | **520** | ✅ |
+| 4 | 8 clés racine, 0 entrée fantôme | 3 clés, 1 fantôme | **8/8, 0** | ✅ |
+| 5 | vocabulaire strict `sens`/`type`/`pieges` | 14 clés sur 4 runs | **les 3** | ✅ |
+| 6 | couverture 36/36 | acquis | **25/36** | ❌ |
+| 7 | écrit hors questions ÷ 36 ≤ 700 car. | 1 571 | **1 170** | ❌ |
+
+**Ce qui échoue est la calibration, pas l'architecture.** La consigne de densité n'a pas mordu : les 12 entrées font 290 à 1 213 caractères (médiane ~880) là où la charte prescrit « rarement au-delà de ~400 ». Et l'agent a **annoncé une couverture qu'il n'a pas livrée** — il écrit « 36 colonnes, toutes couvertes » alors que 11 libellés traduits ne sont nommés nulle part.
+
+**Mesures** : génération **315,1 s** contre 462,7 s (−32 %), coût **1,0852 $** contre 2,0652 $ (−47 %), total des questions **4 074 car.** contre 7 906 (−48 %). Bout en bout **936 s contre 961** — dans le bruit (variance run-à-run ±34 %), aucune conclusion. En revanche le **temps humain monte de 25 %** (495 → 618 s) et pèse désormais **66 %** du total : la slice réduit le temps machine, l'humain devient le poste dominant (Q-0025).
+
+**Deux défauts relevés en séance, non corrigés** : les réponses stockées dans `<dataset>.questions.yaml` portent le préfixe tapé par l'humain (`"6 le découpage correspond à…"`), bruit dans un artefact dont la valeur déclarée est la provenance ; et l'agent rédige ses questions **deux fois** — 4 630 caractères en prose, 3 514 dans le bloc — alors que la charte lui dit que son interlocuteur ne les lit pas dans sa prose.
+
+### Notes — versioning
+MINOR : additif, aucune rupture d'API. `agent/orchestrator.py` intouché ; les 15 tests existants du profil curateur passent **sans modification**, l'analyste one-shot n'est pas concerné. **226 tests déterministes verts**, pyright 0.
+
 ## [0.13.0] — 2026-08-07
 
 ### Ajouté
