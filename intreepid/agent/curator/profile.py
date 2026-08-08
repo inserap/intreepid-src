@@ -17,7 +17,12 @@ from typing import Any
 from claude_agent_sdk import ClaudeAgentOptions
 
 from intreepid.agent.curator.draft import inventory_line, merge_delta
-from intreepid.agent.curator.fiche_writer import write_fiche
+from intreepid.agent.curator.fiche_writer import write_fiche, write_questions
+from intreepid.agent.curator.questions import (
+    attach_answers,
+    merge_questions,
+    render_question,
+)
 from intreepid.agent.curator.surface import Surface
 from intreepid.agent.curator.turn import CuratorTurn, parse_curator_turn
 from intreepid.agent.profile import Profile
@@ -44,6 +49,10 @@ _DISALLOWED = [
 ]
 
 _VALIDATE_WORDS = {"o", "oui", "ok", "valide", "valider", "valid"}
+
+# Confirmer un ENVOI de réponses n'est pas valider une FICHE : deux vocabulaires
+# distincts, pour qu'un ajout à l'un ne change pas le sens de l'autre.
+_SEND_WORDS = {"o", "oui", "ok", "envoie", "envoyer"}
 
 
 def build_options(
@@ -81,11 +90,87 @@ def curator_profile(
     # Brouillon tenu par l'APPLICATION (Q-0023) : l'agent n'émet que ses deltas,
     # et c'est ce dict-ci qui porte la fiche complète d'un tour à l'autre.
     brouillon: dict[str, Any] = {}
+    # Les questions, et les réponses humaines associées par numéro. Elles ne vont
+    # PAS dans la fiche : celle-ci est relue verbatim par un LLM à chaque analyse.
+    questions: list[dict[str, Any]] = []
+    reponses: dict[Any, str] = {}
+
+    def _echo(q: dict[str, Any], reponse: str) -> None:
+        """Rappelle le libellé de l'option choisie, sans deviner.
+
+        Le verrou intermédiaire disparaît en phase 2 (aucun appel LLM entre deux
+        questions) : cet écho est la garde minimale contre la faute de frappe.
+        Il n'affiche QUE si la réponse dépouillée est exactement une clé
+        d'option — aucune heuristique, aucune interprétation.
+        """
+        options = q.get("options")
+        if not isinstance(options, dict):
+            return
+        cle = re.sub(r"[^a-z]", "", reponse.lower())
+        libelle = options.get(cle)
+        if isinstance(libelle, str):
+            surface.show(f"  → ({cle}) {libelle}")
+
+    def _collecter(posees: list[dict[str, Any]]) -> str:
+        """Sert les questions une par une et rend les réponses BRUTES.
+
+        Aucun appel LLM ici : c'est tout le gain de la brique #11. Le retour est
+        gravé en nœud `human_turn` / `actor: "human"`, donc il ne porte que des
+        mots de l'humain — l'association se fait par l'ORDRE de service, jamais
+        par un préfixe ajouté par l'application (I-E).
+        """
+        collectees: list[str] = []
+        total = len(posees)
+        i = 0
+        while i < total:
+            surface.show(render_question(posees[i], position=i + 1, total=total))
+            reponse = surface.ask()
+            if reponse.strip():
+                collectees.append(reponse)
+                numero = posees[i].get("n")
+                if numero is not None:
+                    # SANS cette garde, deux questions sans `n` partagent la clé
+                    # None : la seconde réponse écraserait la première, et
+                    # l'artefact de provenance attribuerait à la question 1 une
+                    # réponse que l'humain a donnée pour une autre. Un artefact
+                    # dont la valeur déclarée est la provenance ne mentira pas :
+                    # sans numéro, `reponse: null` — la parole humaine reste dans
+                    # la trace, nœud `human_turn`.
+                    reponses[numero] = reponse
+                _echo(posees[i], reponse)
+                i += 1
+                continue
+            if not collectees:
+                surface.show("\n[Aucune réponse collectée : rien à envoyer.]")
+                continue
+            surface.show(
+                f"\n[Envoyer maintenant ? {len(collectees)} réponse(s) collectée(s),"
+                f" questions {i + 1} à {total} sans réponse."
+                " 'o' = envoyer ; toute autre saisie repose la question.]"
+            )
+            # Vocabulaire DÉDIÉ, pas `_VALIDATE_WORDS` : celui-là valide une
+            # FICHE. « valide », « ok » y signifieraient « envoie », et un jour
+            # quelqu'un ajouterait un mot à l'un en cassant l'autre.
+            if surface.ask().strip().lower() in _SEND_WORDS:
+                break
+        return "\n".join(collectees)
 
     def _next_input(result: CuratorTurn) -> str | None:
-        nonlocal brouillon
+        nonlocal brouillon, questions
         brouillon = merge_delta(brouillon, result.fiche_delta)
+        questions = merge_questions(questions, result.questions)
         surface.show(result.message or "[tour vide — demande-lui de reformuler]")
+        if "```" in result.message:
+            # `parse_curator_turn` a REPLIÉ : le bloc n'était pas du JSON lisible,
+            # donc ni colonnes ni questions ne sont arrivées, et la prose porte
+            # encore sa fence — c'est la signature exacte du repli, un bloc lu
+            # normalement étant retiré du message. Sans ce message, l'humain voit
+            # du JSON cassé et un prompt nu, sans savoir que le tour est perdu ;
+            # or le runbook lui promet que l'application le dit (design § 9).
+            surface.show(
+                "\n[Bloc de métadonnées illisible : ni colonnes ni questions"
+                " reçues. Ce tour est perdu — demande-lui de le réémettre.]"
+            )
         if result.proposes_completion:
             if not brouillon.get("columns"):
                 # La garde porte sur l'ACCUMULATEUR, plus sur le delta du tour :
@@ -103,6 +188,14 @@ def curator_profile(
             if reply.strip().lower() in _VALIDATE_WORDS:
                 return None  # validé => terminal
             return reply
+        # Filtre AVANT de servir, mêmes règles que `merge_questions` : une liste
+        # dont les entrées ne sont pas des dicts (l'agent écrivant ses questions en
+        # clair dans le tableau) ferait lever `AttributeError` dans `_collecter` et
+        # perdrait la séance ENTIÈRE — `on_result` ne serait jamais atteint, aucune
+        # fiche ne serait écrite. Le design § 9 promet la tolérance sur ce chemin.
+        posees = [q for q in (result.questions or []) if isinstance(q, dict)]
+        if posees:
+            return _collecter(posees)
         return surface.ask()
 
     def _on_result(scribe: Scribe | None, result: CuratorTurn) -> None:
@@ -124,6 +217,14 @@ def curator_profile(
             surface.show(f"✗ échec écriture fiche : {e!r}")
             raise
         surface.show(f"✓ fiche écrite : {path} (sha256 {h[:12]}…)")
+        if questions:
+            chemin_q = catalog_dir / f"{dataset}.questions.yaml"
+            try:
+                write_questions(attach_answers(questions, reponses), chemin_q)
+            except Exception as e:  # feedback garanti (on_result est best-effort)
+                surface.show(f"✗ échec écriture des questions : {e!r}")
+                raise
+            surface.show(f"✓ questions écrites : {chemin_q}")
         if scribe is not None:
             scribe.record_nodes(
                 [

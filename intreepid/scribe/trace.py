@@ -140,6 +140,14 @@ class TraceBuilder:
                         "num_turns": message.num_turns,
                         "total_cost_usd": message.total_cost_usd,
                         "usage": message.usage,
+                        # Les CLÉS de `model_usage` sont les identifiants des
+                        # modèles qui ont RÉELLEMENT tourné. La session ne porte
+                        # que l'ALIAS demandé (« opus ») : sans ceci, aucune mesure
+                        # de ce projet n'est attribuable à une version, et comparer
+                        # deux séances suppose un modèle constant qu'on ne peut pas
+                        # vérifier. Seules les clés sont gardées — les valeurs sont
+                        # des objets du SDK, non sérialisables en JSON.
+                        "models": sorted(message.model_usage or {}),
                         "terminal_reason": message.terminal_reason,
                     },
                     self.root.id,

@@ -6,7 +6,9 @@ retirés du message : une fence illustrative écrite dans la prose disparaît do
 de l'affichage, cas assumé — mais elle ne déplace plus le « dernier bloc », qui
 reste celui des métadonnées. Ce dernier porte `fiche_delta` (les seules colonnes
 tranchées ou corrigées depuis le tour précédent — l'application accumule, cf.
-`draft.py` ; jamais affiché à l'humain) et `proposes_completion`. Parsing
+`draft.py` ; jamais affiché à l'humain) et `proposes_completion`, et `questions`
+— TOUTES les questions du tour, servies par l'application sans appel LLM
+(brique #11). Parsing
 TOLÉRANT : sans bloc, ou bloc non-JSON, tout le texte devient le message ; si la
 prose est vide, repli sur un champ `message` du bloc (ancien format). La fiche
 reste un dict OPAQUE (aucun schéma figé).
@@ -25,6 +27,7 @@ class CuratorTurn:
     message: str
     fiche_delta: dict[str, Any] | None
     proposes_completion: bool
+    questions: list[dict[str, Any]] | None = None
 
 
 def _fallback(text: str) -> CuratorTurn:
@@ -55,8 +58,10 @@ def parse_curator_turn(text: str) -> CuratorTurn:
     if not message:  # aucun texte hors bloc => repli sur l'ancien champ `message`
         message = str(payload.get("message", "")).strip()
     draft = payload.get("fiche_delta")
+    posees = payload.get("questions")
     return CuratorTurn(
         message=message,
         fiche_delta=draft if isinstance(draft, dict) and draft else None,
-        proposes_completion=bool(payload.get("proposes_completion", False)),
+        proposes_completion=bool(payload.get("proposes_completion")),
+        questions=posees if isinstance(posees, list) and posees else None,
     )

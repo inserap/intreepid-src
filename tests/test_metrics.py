@@ -463,3 +463,63 @@ def test_resultat_sans_appel_connu_ne_casse_pas_l_appariement() -> None:
     assert len(m.tools) == 1
     assert m.tools[0].duration_ms is None  # non apparié => durée inconnue
     assert m.total_tool_measured_ms is None
+
+
+def test_le_modele_resolu_est_capture_et_rendu(tmp_path) -> None:
+    """La trace enregistrait l'ALIAS (« opus »), jamais la version qui a tourné.
+
+    Constat du gate de la brique #11 : tout ce projet compare des séances à la
+    seconde près, et rien ne permettait de dire si deux séances avaient tourné
+    sur le même modèle. Les bases de comparaison reposaient donc sur une
+    hypothèse invérifiable. `ResultMessage.model_usage` est indexé par
+    identifiant de modèle : on en garde les CLÉS, seules données utiles ici et
+    seules sérialisables telles quelles.
+    """
+    db = tmp_path / "modele.duckdb"
+    with Scribe(db, "s1", "q", "opus") as sc:
+        sc.record(
+            ResultMessage(
+                subtype="success",
+                duration_ms=1000,
+                duration_api_ms=900,
+                is_error=False,
+                num_turns=1,
+                session_id="s1",
+                total_cost_usd=0.01,
+                usage={"output_tokens": 10},
+                model_usage={"claude-x-4-5-20260101": object()},  # type: ignore[dict-item]
+                terminal_reason="completed",
+            )
+        )
+    m = summarize(load(db, "s1"))
+    assert m.models == ["claude-x-4-5-20260101"]
+    assert "claude-x-4-5-20260101" in render_metrics(m)
+
+
+def test_absence_de_modele_ne_ment_pas(tmp_path) -> None:
+    """Une trace ancienne n'a pas l'information : liste vide, et rien d'affiché.
+
+    Inconnu n'est pas « aucun modèle » : on n'invente pas une ligne de rendu
+    qui laisserait croire que la question a été posée et répondue.
+    """
+    db = tmp_path / "sansmodele.duckdb"
+    with Scribe(db, "s1", "q", "opus") as sc:
+        sc.record(
+            ResultMessage(
+                subtype="success",
+                duration_ms=1000,
+                duration_api_ms=900,
+                is_error=False,
+                num_turns=1,
+                session_id="s1",
+                total_cost_usd=0.01,
+                usage={"output_tokens": 10},
+                terminal_reason="completed",
+            )
+        )
+    m = summarize(load(db, "s1"))
+    assert m.models == []
+    # On vise le LIBELLÉ exact, pas le mot « modèle » : l'asserter nu ferait
+    # échouer ce test le jour où une autre ligne du rendu l'emploie — un test
+    # qui tombe sur un ajout sans rapport n'apprend plus rien.
+    assert "modèle(s) résolu(s)" not in render_metrics(m)

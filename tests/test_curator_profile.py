@@ -219,7 +219,7 @@ def test_build_prompt_porte_linventaire(tmp_path):
     out = build_prompt([{"user": "start"}, {"assistant": "t1"}])
     assert "Brouillon conservé par l'application" in out
     assert "alpha" in out and "beta" in out
-    assert "2 colonne" in out
+    assert "2 entrée" in out
 
 
 def test_linventaire_ne_contamine_pas_la_reponse_humaine(tmp_path):
@@ -281,3 +281,252 @@ def test_les_trois_retours_de_next_input_ne_portent_que_lhumain(
         CuratorTurn(message="t", fiche_delta=delta, proposes_completion=propose)
     )
     assert retour == dit, f"chemin « {cas} » : retour contaminé"
+
+
+def _reader_scripte(reponses: list[str]):
+    """Rend un reader qui débite `reponses` puis lève si on lui en demande plus."""
+    file = list(reponses)
+
+    def _lire(_prompt: str = "> ") -> str:
+        if not file:
+            raise AssertionError("le profil a demandé plus de réponses que prévu")
+        return file.pop(0)
+
+    return _lire
+
+
+def _tour_avec_questions(nb: int, propose: bool = False) -> CuratorTurn:
+    return CuratorTurn(
+        message="m",
+        fiche_delta={"columns": {"a": {}}},
+        proposes_completion=propose,
+        questions=[
+            {"n": i, "colonne": f"c{i}", "options": {"a": "oui", "b": "non"}}
+            for i in range(1, nb + 1)
+        ],
+    )
+
+
+def test_les_questions_sont_servies_une_par_une(tmp_path):
+    vus: list[str] = []
+    prof = curator_profile(
+        "d.parquet",
+        tmp_path,
+        surface=Surface(writer=vus.append, reader=_reader_scripte(["1a", "2b", "3a"])),
+    )
+    next_input = prof.next_input
+    assert next_input is not None
+    retour = next_input(_tour_avec_questions(3))
+    affiche = "\n".join(vus)
+    assert "Question 1/3" in affiche
+    assert "Question 2/3" in affiche
+    assert "Question 3/3" in affiche
+    assert retour == "1a\n2b\n3a"
+
+
+def test_le_retour_ne_porte_aucun_mot_de_lapplication(tmp_path):
+    """I-E : `next_input` est gravé en `human_turn` / actor human.
+
+    Aucun numéro ajouté, aucun libellé d'option : l'association se fait par
+    l'ORDRE de service, et l'agent a ses propres numéros dans son historique.
+    """
+    prof = curator_profile(
+        "d.parquet",
+        tmp_path,
+        surface=Surface(writer=lambda _t: None, reader=_reader_scripte(["1a", "2b"])),
+    )
+    next_input = prof.next_input
+    assert next_input is not None
+    retour = next_input(_tour_avec_questions(2))
+    assert retour == "1a\n2b"
+    for parasite in ("Question", "Brouillon", "oui", "non", "→"):
+        assert parasite not in retour
+
+
+def test_lecho_rappelle_le_libelle_de_loption_choisie(tmp_path):
+    vus: list[str] = []
+    prof = curator_profile(
+        "d.parquet",
+        tmp_path,
+        surface=Surface(writer=vus.append, reader=_reader_scripte(["1a"])),
+    )
+    next_input = prof.next_input
+    assert next_input is not None
+    next_input(_tour_avec_questions(1))
+    assert any("(a) oui" in t for t in vus)
+
+
+def test_ligne_vide_puis_o_envoie_ce_qui_est_collecte(tmp_path):
+    vus: list[str] = []
+    prof = curator_profile(
+        "d.parquet",
+        tmp_path,
+        surface=Surface(writer=vus.append, reader=_reader_scripte(["1a", "", "o"])),
+    )
+    next_input = prof.next_input
+    assert next_input is not None
+    retour = next_input(_tour_avec_questions(5))
+    assert retour == "1a"
+    affiche = "\n".join(vus)
+    assert "Envoyer maintenant" in affiche
+    assert "questions 2 à 5 sans réponse" in affiche
+
+
+def test_ligne_vide_puis_n_reprend_la_question_courante(tmp_path):
+    vus: list[str] = []
+    prof = curator_profile(
+        "d.parquet",
+        tmp_path,
+        surface=Surface(
+            writer=vus.append, reader=_reader_scripte(["1a", "", "n", "2b"])
+        ),
+    )
+    next_input = prof.next_input
+    assert next_input is not None
+    retour = next_input(_tour_avec_questions(2))
+    assert retour == "1a\n2b"
+    assert sum(1 for t in vus if "Question 2/2" in t) == 2  # reposée
+
+
+def test_envoi_refuse_sans_aucune_reponse_collectee(tmp_path):
+    vus: list[str] = []
+    prof = curator_profile(
+        "d.parquet",
+        tmp_path,
+        surface=Surface(writer=vus.append, reader=_reader_scripte(["", "1a"])),
+    )
+    next_input = prof.next_input
+    assert next_input is not None
+    retour = next_input(_tour_avec_questions(1))
+    assert retour == "1a"
+    assert any("rien à envoyer" in t for t in vus)
+
+
+def test_sans_questions_le_comportement_actuel_est_preserve(tmp_path):
+    """Repli STRUCTUREL : un bloc sans `questions` retombe sur une saisie unique."""
+    prof = curator_profile(
+        "d.parquet",
+        tmp_path,
+        surface=Surface(writer=lambda _t: None, reader=_reader_scripte(["ma reponse"])),
+    )
+    next_input = prof.next_input
+    assert next_input is not None
+    turn = CuratorTurn(message="m", fiche_delta=None, proposes_completion=False)
+    assert next_input(turn) == "ma reponse"
+
+
+def test_questions_non_dict_ne_perdent_pas_la_seance(tmp_path):
+    """Mode de panne qui coûterait la séance ENTIÈRE, pas seulement un tour.
+
+    Si l'agent écrit ses questions en clair dans le tableau, servir ces entrées
+    lèverait `AttributeError` dans la boucle de collecte : `on_result` ne serait
+    jamais atteint et aucune fiche ne serait écrite. Le repli est structurel —
+    on retombe sur la saisie unique, comme si le bloc n'avait pas de questions.
+    """
+    prof = curator_profile(
+        "d.parquet",
+        tmp_path,
+        surface=Surface(writer=lambda _t: None, reader=_reader_scripte(["libre"])),
+    )
+    next_input = prof.next_input
+    assert next_input is not None
+    turn = CuratorTurn(
+        message="m",
+        fiche_delta=None,
+        proposes_completion=False,
+        questions=["Question 1 : ...", "Question 2 : ..."],  # type: ignore[list-item]
+    )
+    assert next_input(turn) == "libre"
+
+
+def test_bloc_illisible_le_dit_a_lhumain(tmp_path):
+    """Le runbook promet que l'application parle ; sans ceci elle se taisait.
+
+    Un bloc non-JSON fait replier `parse_curator_turn` : ni colonnes ni
+    questions n'arrivent, et la prose porte encore sa fence. L'humain voyait
+    « Voici mes questions. » suivi du JSON cassé, puis un prompt nu — aucune
+    question servie et rien pour le lui dire, en pleine séance payée.
+    """
+    vus: list[str] = []
+    prof = curator_profile(
+        "d.parquet",
+        tmp_path,
+        surface=Surface(writer=vus.append, reader=_reader_scripte(["reemets"])),
+    )
+    next_input = prof.next_input
+    assert next_input is not None
+    casse = CuratorTurn(
+        message='Voici mes questions.\n```json\n{"questions": [{"n": 1}\n```',
+        fiche_delta=None,
+        proposes_completion=False,
+    )
+    assert next_input(casse) == "reemets"
+    assert any("Bloc de métadonnées illisible" in t for t in vus)
+    assert any("tour est perdu" in t for t in vus)
+
+
+def test_un_tour_normal_ne_crie_pas_au_bloc_illisible(tmp_path):
+    """Discriminance : la garde ne doit pas se déclencher sur un tour sain."""
+    vus: list[str] = []
+    prof = curator_profile(
+        "d.parquet",
+        tmp_path,
+        surface=Surface(writer=vus.append, reader=_reader_scripte(["1a"])),
+    )
+    next_input = prof.next_input
+    assert next_input is not None
+    next_input(_tour_avec_questions(1))
+    assert not any("illisible" in t for t in vus)
+
+
+def test_on_result_ecrit_les_deux_artefacts_avec_les_reponses(tmp_path):
+    prof = curator_profile(
+        "d.parquet",
+        tmp_path,
+        surface=Surface(
+            writer=lambda _t: None, reader=_reader_scripte(["1a", "2b", "o"])
+        ),
+    )
+    next_input, on_result = prof.next_input, prof.on_result
+    assert next_input is not None and on_result is not None
+    tour = CuratorTurn(
+        message="m",
+        fiche_delta={"dataset": "mon_dataset", "columns": {"a": {}}},
+        proposes_completion=False,
+        questions=[
+            {"n": 1, "colonne": "c1", "options": {"a": "oui"}},
+            {"n": 2, "colonne": "c2", "options": {"b": "non"}},
+        ],
+    )
+    next_input(tour)
+    final = CuratorTurn(message="prête ?", fiche_delta=None, proposes_completion=True)
+    assert next_input(final) is None  # 'o' => validé
+    on_result(None, final)
+
+    fiche = yaml.safe_load(
+        (tmp_path / "mon_dataset.fiche.yaml").read_text(encoding="utf-8")
+    )
+    assert "questions" not in fiche  # la fiche est écrite POUR un LLM
+    posees = yaml.safe_load(
+        (tmp_path / "mon_dataset.questions.yaml").read_text(encoding="utf-8")
+    )
+    assert [q["reponse"] for q in posees] == ["1a", "2b"]
+
+
+def test_aucun_fichier_de_questions_si_aucune_question(tmp_path):
+    prof = curator_profile(
+        "d.parquet",
+        tmp_path,
+        surface=Surface(writer=lambda _t: None, reader=_reader_scripte(["o"])),
+    )
+    next_input, on_result = prof.next_input, prof.on_result
+    assert next_input is not None and on_result is not None
+    final = CuratorTurn(
+        message="prête ?",
+        fiche_delta={"dataset": "mon_dataset", "columns": {"a": {}}},
+        proposes_completion=True,
+    )
+    assert next_input(final) is None
+    on_result(None, final)
+    assert (tmp_path / "mon_dataset.fiche.yaml").is_file()
+    assert not (tmp_path / "mon_dataset.questions.yaml").exists()

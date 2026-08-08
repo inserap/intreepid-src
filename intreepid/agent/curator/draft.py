@@ -48,8 +48,8 @@ def inventory_line(acc: dict[str, Any] | None) -> str:
     """
     colonnes = sorted((acc or {}).get("columns") or {})
     if not colonnes:
-        return "Brouillon conservé par l'application : aucune colonne documentée."
+        return "Brouillon conservé par l'application : aucune entrée documentée."
     return (
-        f"Brouillon conservé par l'application : {len(colonnes)} colonne(s)"
+        f"Brouillon conservé par l'application : {len(colonnes)} entrée(s)"
         f" documentée(s) — {', '.join(colonnes)}."
     )
