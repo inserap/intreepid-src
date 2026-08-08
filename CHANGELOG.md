@@ -10,7 +10,7 @@ Le format suit [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), et le v
 
 ## [0.14.0] — 2026-08-08
 
-> **Gate humain ÉCHOUÉ (3 critères sur 7)** — version publiée comme **prérequis**, non comme livrable achevé. Le mécanisme central passe ; la calibration de la fiche échoue. Détail en fin de section.
+> **Gate humain ÉCHOUÉ (2 critères sur 7)** — version publiée comme **prérequis**, non comme livrable achevé. Le mécanisme central passe ; seule la **densité** de la fiche échoue. Détail en fin de section, y compris un troisième critère d'abord compté en échec **à tort**.
 
 ### Ajouté
 - **L'agent pose TOUTES ses questions en un tour, l'application les sert une par une** (`agent/curator/questions.py`, **NEW**) : `merge_questions` accumule et fusionne **par numéro** (dernière écriture gagne, même sémantique que `columns`), `render_question` assemble le texte affiché, `attach_answers` y attache la réponse humaine. Trois fonctions **pures**. **Aucun appel LLM entre deux questions** : c'est là qu'est le gain — **5 appels LLM → 2**, mesuré. La boucle multi-tours n'a pas bougé et `agent/orchestrator.py` est à **zéro ligne modifiée** ; ce sont la charte et ces trois fonctions qui font qu'un seul tour suffit.
@@ -38,10 +38,14 @@ Séance réelle sur l'OFROU brut (267 761 lignes, 36 colonnes), **7 questions, 2
 | 3 | médiane par question ≤ 800 car. | 2 007 | **520** | ✅ |
 | 4 | 8 clés racine, 0 entrée fantôme | 3 clés, 1 fantôme | **8/8, 0** | ✅ |
 | 5 | vocabulaire strict `sens`/`type`/`pieges` | 14 clés sur 4 runs | **les 3** | ✅ |
-| 6 | couverture 36/36 | acquis | **25/36** | ❌ |
+| 6 | couverture 36/36 | acquis | **36/36** — voir ci-dessous | ✅ |
 | 7 | écrit hors questions ÷ 36 ≤ 700 car. | 1 571 | **1 170** | ❌ |
 
-**Ce qui échoue est la calibration, pas l'architecture.** La consigne de densité n'a pas mordu : les 12 entrées font 290 à 1 213 caractères (médiane ~880) là où la charte prescrit « rarement au-delà de ~400 ». Et l'agent a **annoncé une couverture qu'il n'a pas livrée** — il écrit « 36 colonnes, toutes couvertes » alors que 11 libellés traduits ne sont nommés nulle part.
+**Le critère 6 a d'abord été compté en échec (25/36), à tort.** La commande de mesure cherche le nom complet d'une colonne ; l'agent, lui, groupe en abrégeant — `Couvre aussi AccidentWeekDay_de, _fr, _it, _en`. Vérifié entrée par entrée : **les 11 colonnes déclarées manquantes sont nommées par cette notation, 11 sur 11**. La couverture est complète ; c'est le critère qui sous-détecte, et il punissait donc un succès — le mode d'échec que ce projet documente depuis quatre cycles. Le runbook prévoyait la relecture à l'œil des entrées groupées en la disant « nécessaire, non suffisante » ; elle s'est révélée nécessaire dans l'autre sens. **À corriger dans la commande avant la prochaine séance.**
+
+**Ce qui échoue est donc la seule densité, et l'architecture n'est pas en cause.** Les 12 entrées font 290 à 1 213 caractères (médiane ~880) là où la charte prescrit « rarement au-delà de ~400 » : la consigne n'a pas mordu.
+
+**Hypothèse sérieuse sur la cause, formulée par l'utilisateur en séance et étayée** : le gabarit de la charte annonce « 40 000 lignes, **12 colonnes** », et la fiche produite porte **exactement 12 entrées** pour 36 colonnes — là où le gabarit précédent, qui ne citait aucun décompte, avait produit **37 entrées**. Un ancrage du modèle sur l'exemple est plausible, et il expliquerait le sur-groupement. De même, le § *Exemple de forme* montre des questions **rédigées en prose**, puis annonce « ce tour se poursuit par le bloc JSON » : la charte enseigne donc littéralement la duplication constatée. À instruire dans la slice suivante.
 
 **Mesures** : génération **315,1 s** contre 462,7 s (−32 %), coût **1,0852 $** contre 2,0652 $ (−47 %), total des questions **4 074 car.** contre 7 906 (−48 %). Bout en bout **936 s contre 961** — dans le bruit (variance run-à-run ±34 %), aucune conclusion. En revanche le **temps humain monte de 25 %** (495 → 618 s) et pèse désormais **66 %** du total : la slice réduit le temps machine, l'humain devient le poste dominant (Q-0025).
 
