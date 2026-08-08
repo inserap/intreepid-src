@@ -31,7 +31,7 @@ renvoyé par le SDK, alors que la facturation porte sur le raisonnement ENTIER :
 c'est donc un MINORANT, non commensurable en coût avec la sortie de l'agent.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from intreepid.scribe.trace import SessionTrace, TraceNode
@@ -77,6 +77,10 @@ class SessionMetrics:
     calls_by_tool: dict[str, int]
     prose_chars: int | None
     thinking_chars: int | None
+    # Identifiants des modèles qui ont RÉELLEMENT tourné, distincts de l'alias
+    # demandé (`SessionTrace.model`, « opus »). Liste vide = trace antérieure à
+    # cette capture : inconnu, jamais « aucun ».
+    models: list[str] = field(default_factory=list)
     degraded: bool = False
 
 
@@ -237,6 +241,16 @@ def summarize(trace: SessionTrace) -> SessionMetrics:
         calls_by_tool=calls_by_tool,
         prose_chars=sum(prose) if prose else None,
         thinking_chars=sum(pensee) if pensee else None,
+        # Union sur tous les tours : un modèle peut changer EN COURS de session
+        # (repli, sous-agent), et n'en montrer qu'un le masquerait.
+        models=sorted(
+            {
+                str(m)
+                for n in trace.nodes
+                if n.kind == "turn_result"
+                for m in (n.content.get("models") or [])
+            }
+        ),
         degraded=degraded,
     )
 
@@ -264,6 +278,10 @@ def render_metrics(m: SessionMetrics) -> str:
         f" · coût total : {_cout(m.total_cost_usd, tours_sans_cout)}"
         f" · {'?' if m.degraded else len(m.turns)} tour(s)",
     ]
+    # Rien à afficher si la trace est antérieure à cette capture : une ligne
+    # « modèle : ? » laisserait croire que la question a été posée et répondue.
+    if m.models:
+        lignes.append(f"  modèle(s) résolu(s) : {', '.join(m.models)}")
     if m.degraded:
         lignes.append(
             "  (mesure dégradée : trace antérieure à l'instrumentation —"
